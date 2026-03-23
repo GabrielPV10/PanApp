@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Pedidos de Pan"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PanApp">
+
+        <!-- ── Pantalla principal ─────────────────────────────── -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ── Captura de pedido ──────────────────────────────── -->
+        <activity
+            android:name=".PedidoActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- ── Resumen de producción ──────────────────────────── -->
+        <activity
+            android:name=".ResumenActivity"
+            android:exported="false" />
+
+        <!-- ── Historial de semanas ───────────────────────────── -->
+        <activity
+            android:name=".HistorialActivity"
+            android:exported="false" />
+
+    </application>
+
+</manifest>
