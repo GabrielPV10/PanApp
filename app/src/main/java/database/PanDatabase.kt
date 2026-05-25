@@ -4,27 +4,92 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @Database(
-    entities = [Semana::class, Cliente::class, ItemPedido::class],
-    version = 1,
+    entities = [Semana::class, Cliente::class, ItemPedido::class, Producto::class],
+    version = 2,
     exportSchema = false
 )
 abstract class PanDatabase : RoomDatabase() {
     abstract fun semanaDao(): SemanaDao
     abstract fun clienteDao(): ClienteDao
     abstract fun itemPedidoDao(): ItemPedidoDao
+    abstract fun productoDao(): ProductoDao
 
     companion object {
         @Volatile private var INSTANCE: PanDatabase? = null
 
-        fun getInstance(context: Context): PanDatabase =
-            INSTANCE ?: synchronized(this) {
+        /** Migración 1 → 2: crea la tabla del catálogo de productos */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `productos_catalogo` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `categoria` TEXT NOT NULL,
+                        `variante` TEXT NOT NULL,
+                        `precioUnitario` REAL NOT NULL,
+                        `emoji` TEXT NOT NULL DEFAULT '🍞',
+                        `orden` INTEGER NOT NULL DEFAULT 0
+                    )"""
+                )
+            }
+        }
+
+        fun getInstance(context: Context): PanDatabase {
+            return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
                     context.applicationContext,
                     PanDatabase::class.java,
                     "pan_database"
-                ).build().also { INSTANCE = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { db ->
+                        INSTANCE = db
+                        // Poblar catálogo en primera instalación/migración
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val dao = db.productoDao()
+                            if (dao.count() == 0) {
+                                catalogoSemilla.forEach { dao.insert(it) }
+                            }
+                        }
+                    }
             }
+        }
+
+        // ── Datos semilla del catálogo ────────────────────────────────────
+        private val catalogoSemilla = listOf(
+            Producto(categoria = "Dona",      variante = "Chocolate",          precioUnitario = 12.0, emoji = "🍩", orden = 10),
+            Producto(categoria = "Dona",      variante = "Rellena crema",      precioUnitario = 12.0, emoji = "🍩", orden = 11),
+            Producto(categoria = "Dona",      variante = "Glaseada",           precioUnitario = 10.0, emoji = "🍩", orden = 12),
+            Producto(categoria = "Dona",      variante = "Azúcar",             precioUnitario = 10.0, emoji = "🍩", orden = 13),
+            Producto(categoria = "Dona",      variante = "Canela",             precioUnitario = 10.0, emoji = "🍩", orden = 14),
+            Producto(categoria = "Empanada",  variante = "Manzana",            precioUnitario = 15.0, emoji = "🥧", orden = 20),
+            Producto(categoria = "Empanada",  variante = "Piña",               precioUnitario = 15.0, emoji = "🥧", orden = 21),
+            Producto(categoria = "Empanada",  variante = "Cajeta",             precioUnitario = 15.0, emoji = "🥧", orden = 22),
+            Producto(categoria = "Empanada",  variante = "Queso",              precioUnitario = 15.0, emoji = "🥧", orden = 23),
+            Producto(categoria = "Empanada",  variante = "Frijol",             precioUnitario = 14.0, emoji = "🥧", orden = 24),
+            Producto(categoria = "Pan dulce", variante = "Concha vainilla",    precioUnitario = 10.0, emoji = "🍞", orden = 30),
+            Producto(categoria = "Pan dulce", variante = "Concha chocolate",   precioUnitario = 10.0, emoji = "🍞", orden = 31),
+            Producto(categoria = "Pan dulce", variante = "Polvorón",           precioUnitario = 8.0,  emoji = "🍞", orden = 32),
+            Producto(categoria = "Pan dulce", variante = "Cuernito",           precioUnitario = 8.0,  emoji = "🥐", orden = 33),
+            Producto(categoria = "Pan dulce", variante = "Oreja",              precioUnitario = 9.0,  emoji = "🍞", orden = 34),
+            Producto(categoria = "Pan salado",variante = "Bolillo",            precioUnitario = 5.0,  emoji = "🥖", orden = 40),
+            Producto(categoria = "Pan salado",variante = "Telera",             precioUnitario = 5.0,  emoji = "🥖", orden = 41),
+            Producto(categoria = "Pan salado",variante = "Baguette",           precioUnitario = 18.0, emoji = "🥖", orden = 42),
+            Producto(categoria = "Pastel",    variante = "Porción tres leches",precioUnitario = 35.0, emoji = "🎂", orden = 50),
+            Producto(categoria = "Pastel",    variante = "Porción chocolate",  precioUnitario = 35.0, emoji = "🎂", orden = 51),
+            Producto(categoria = "Galleta",   variante = "Chispas choco",      precioUnitario = 8.0,  emoji = "🍪", orden = 60),
+            Producto(categoria = "Galleta",   variante = "Mantequilla",        precioUnitario = 8.0,  emoji = "🍪", orden = 61),
+            Producto(categoria = "Galleta",   variante = "Avena",              precioUnitario = 8.0,  emoji = "🍪", orden = 62),
+            Producto(categoria = "Otro",      variante = "Cupcake",            precioUnitario = 20.0, emoji = "🧁", orden = 70),
+            Producto(categoria = "Otro",      variante = "Brownie",            precioUnitario = 22.0, emoji = "🍫", orden = 71),
+            Producto(categoria = "Otro",      variante = "Rollo canela",       precioUnitario = 25.0, emoji = "🌀", orden = 72),
+        )
     }
 }

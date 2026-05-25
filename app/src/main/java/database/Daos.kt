@@ -11,6 +11,9 @@ interface SemanaDao {
     @Query("SELECT * FROM semanas ORDER BY id DESC LIMIT 1")
     suspend fun getUltima(): Semana?
 
+    @Query("SELECT * FROM semanas WHERE id = :id")
+    fun getById(id: Long): Flow<Semana?>
+
     @Insert
     suspend fun insert(semana: Semana): Long
 
@@ -21,8 +24,12 @@ interface SemanaDao {
 @Dao
 interface ClienteDao {
     @Transaction
-    @Query("SELECT * FROM clientes WHERE semanaId = :semanaId ORDER BY nombre ASC")
+    @Query("SELECT * FROM clientes WHERE semanaId = :semanaId ORDER BY entregado ASC, nombre ASC")
     fun getClientesDeSemana(semanaId: Long): Flow<List<ClienteConItems>>
+
+    @Transaction
+    @Query("SELECT * FROM clientes WHERE semanaId = :semanaId ORDER BY nombre ASC")
+    suspend fun getClientesDeSemanaOnce(semanaId: Long): List<ClienteConItems>
 
     @Transaction
     @Query("SELECT * FROM semanas ORDER BY id DESC")
@@ -55,9 +62,11 @@ interface ItemPedidoDao {
     @Insert
     suspend fun insert(item: ItemPedido)
 
-    // Total de cada variante en una semana (para producción)
+    // Suma de piezas Y precio por variante en una semana — usa precios históricos almacenados
     @Query("""
-        SELECT ip.categoria, ip.variante, SUM(ip.cantidad) as totalCantidad
+        SELECT ip.categoria, ip.variante,
+               SUM(ip.cantidad) as totalCantidad,
+               SUM(ip.cantidad * ip.precioUnitario) as totalPrecio
         FROM items_pedido ip
         INNER JOIN clientes c ON ip.clienteId = c.id
         WHERE c.semanaId = :semanaId
@@ -67,9 +76,31 @@ interface ItemPedidoDao {
     fun getResumenProduccion(semanaId: Long): Flow<List<ResumenItem>>
 }
 
-// Clase auxiliar para el resumen de producción
+@Dao
+interface ProductoDao {
+    @Query("SELECT * FROM productos_catalogo ORDER BY orden ASC, categoria ASC, variante ASC")
+    fun getAll(): Flow<List<Producto>>
+
+    @Query("SELECT * FROM productos_catalogo ORDER BY orden ASC, categoria ASC, variante ASC")
+    suspend fun getAllOnce(): List<Producto>
+
+    @Insert
+    suspend fun insert(producto: Producto): Long
+
+    @Update
+    suspend fun update(producto: Producto)
+
+    @Delete
+    suspend fun delete(producto: Producto)
+
+    @Query("SELECT COUNT(*) FROM productos_catalogo")
+    suspend fun count(): Int
+}
+
+// Resultado del resumen de producción (incluye precio histórico almacenado)
 data class ResumenItem(
     val categoria: String,
     val variante: String,
-    val totalCantidad: Int
+    val totalCantidad: Int,
+    val totalPrecio: Double = 0.0
 )

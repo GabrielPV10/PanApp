@@ -7,8 +7,8 @@ import androidx.room.*
 @Entity(tableName = "semanas")
 data class Semana(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val fechaInicio: String,   // "2025-01-13"
-    val etiqueta: String       // "Semana del 13 Ene"
+    val fechaInicio: String,
+    val etiqueta: String
 )
 
 @Entity(tableName = "clientes")
@@ -28,6 +28,17 @@ data class ItemPedido(
     val variante: String,
     val cantidad: Int,
     val precioUnitario: Double
+)
+
+/** Producto del catálogo — editable por el usuario */
+@Entity(tableName = "productos_catalogo")
+data class Producto(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val categoria: String,
+    val variante: String,
+    val precioUnitario: Double,
+    val emoji: String = "🍞",
+    val orden: Int = 0
 )
 
 // ─── RELACIONES ──────────────────────────────────────────────────────────────

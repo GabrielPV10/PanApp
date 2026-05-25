@@ -10,15 +10,21 @@ import java.time.format.DateTimeFormatter
 
 class PanViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val db = PanDatabase.getInstance(application)
-    private val semanaDao = db.semanaDao()
-    private val clienteDao = db.clienteDao()
-    private val itemDao = db.itemPedidoDao()
+    private val db          = PanDatabase.getInstance(application)
+    private val semanaDao   = db.semanaDao()
+    private val clienteDao  = db.clienteDao()
+    private val itemDao     = db.itemPedidoDao()
+    private val productoDao = db.productoDao()
 
     // ─── SEMANA ACTIVA ───────────────────────────────────────────────────────
 
     private val _semanaActualId = MutableStateFlow<Long?>(null)
     val semanaActualId: StateFlow<Long?> = _semanaActualId
+
+    /** Objeto Semana activa (para mostrar la etiqueta en el header) */
+    val semanaActual: Flow<Semana?> = _semanaActualId.flatMapLatest { id ->
+        if (id != null) semanaDao.getById(id) else flowOf(null)
+    }
 
     init {
         viewModelScope.launch {
@@ -27,14 +33,21 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun crearNuevaSemana() = viewModelScope.launch {
+    fun crearNuevaSemana(copiarDeSemanaId: Long? = null) = viewModelScope.launch {
         val hoy = LocalDate.now()
         val fmt = DateTimeFormatter.ofPattern("dd MMM yyyy")
         val semana = Semana(
             fechaInicio = hoy.toString(),
-            etiqueta = "Semana del ${hoy.format(fmt)}"
+            etiqueta    = "Semana del ${hoy.format(fmt)}"
         )
         val id = semanaDao.insert(semana)
+        if (copiarDeSemanaId != null) {
+            clienteDao.getClientesDeSemanaOnce(copiarDeSemanaId).forEach { cc ->
+                clienteDao.insertCliente(
+                    Cliente(semanaId = id, nombre = cc.cliente.nombre, notas = cc.cliente.notas)
+                )
+            }
+        }
         _semanaActualId.value = id
     }
 
@@ -45,9 +58,7 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
 
     fun agregarCliente(semanaId: Long, nombre: String, notas: String = "") =
         viewModelScope.launch {
-            clienteDao.insertCliente(
-                Cliente(semanaId = semanaId, nombre = nombre, notas = notas)
-            )
+            clienteDao.insertCliente(Cliente(semanaId = semanaId, nombre = nombre, notas = notas))
         }
 
     fun toggleEntregado(cliente: Cliente) = viewModelScope.launch {
@@ -59,7 +70,11 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
         clienteDao.deleteCliente(clienteConItems.cliente)
     }
 
-    fun actualizarNotas(cliente: Cliente, notas: String) = viewModelScope.launch {
+    fun actualizarNombreCliente(cliente: Cliente, nuevoNombre: String) = viewModelScope.launch {
+        clienteDao.updateCliente(cliente.copy(nombre = nuevoNombre))
+    }
+
+    fun actualizarNotasCliente(cliente: Cliente, notas: String) = viewModelScope.launch {
         clienteDao.updateCliente(cliente.copy(notas = notas))
     }
 
@@ -68,18 +83,18 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
     fun getItemsDeCliente(clienteId: Long): Flow<List<ItemPedido>> =
         itemDao.getItemsDeCliente(clienteId)
 
-    // Guarda el pedido completo de un cliente (reemplaza todo)
-    fun guardarPedido(clienteId: Long, cantidades: Map<ProductoCatalogo, Int>) =
+    /** Guarda el pedido completo de un cliente (reemplaza todo) */
+    fun guardarPedido(clienteId: Long, cantidades: Map<Producto, Int>) =
         viewModelScope.launch {
             itemDao.deleteItemsDeCliente(clienteId)
             val items = cantidades
                 .filter { it.value > 0 }
                 .map { (prod, cant) ->
                     ItemPedido(
-                        clienteId = clienteId,
-                        categoria = prod.categoria,
-                        variante = prod.variante,
-                        cantidad = cant,
+                        clienteId      = clienteId,
+                        categoria      = prod.categoria,
+                        variante       = prod.variante,
+                        cantidad       = cant,
                         precioUnitario = prod.precioUnitario
                     )
                 }
@@ -94,7 +109,37 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
     // ─── HISTORIAL ───────────────────────────────────────────────────────────
 
     val historial: Flow<List<SemanaConClientes>> = clienteDao.getHistorial()
-    val todasLasSemanas: Flow<List<Semana>> = semanaDao.getAll()
+
+    // ─── CATÁLOGO DE PRODUCTOS ───────────────────────────────────────────────
+
+    val productos: Flow<List<Producto>> = productoDao.getAll()
+
+    fun agregarProducto(
+        categoria: String,
+        variante: String,
+        precio: Double,
+        emoji: String
+    ) = viewModelScope.launch {
+        val existentes = productoDao.getAllOnce()
+        val maxOrden   = existentes.maxOfOrNull { it.orden } ?: 0
+        productoDao.insert(
+            Producto(
+                categoria      = categoria.trim(),
+                variante       = variante.trim(),
+                precioUnitario = precio,
+                emoji          = emoji.trim().ifBlank { "🍞" },
+                orden          = maxOrden + 1
+            )
+        )
+    }
+
+    fun editarProducto(producto: Producto) = viewModelScope.launch {
+        productoDao.update(producto)
+    }
+
+    fun eliminarProducto(producto: Producto) = viewModelScope.launch {
+        productoDao.delete(producto)
+    }
 }
 
 class PanViewModelFactory(private val application: Application) :

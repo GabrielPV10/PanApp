@@ -20,14 +20,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.panapp.database.Cliente
 import com.example.panapp.database.ClienteConItems
+import com.example.panapp.database.Producto
+import com.example.panapp.database.Semana
 import com.example.panapp.ui.theme.PanAppTheme
+import kotlinx.coroutines.flow.flowOf
 
 class MainActivity : ComponentActivity() {
     private val vm: PanViewModel by viewModels { PanViewModelFactory(application) }
@@ -37,38 +40,25 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PanAppTheme {
-
-                // Observamos el estado aquí y lo pasamos hacia abajo
-                val semanaId by vm.semanaActualId.collectAsStateWithLifecycle()
-                val clientes by remember(semanaId) {
-                    semanaId?.let { vm.getClientesDeSemana(it) }
-                        ?: kotlinx.coroutines.flow.flowOf(emptyList())
-                }.collectAsStateWithLifecycle(emptyList())
-
-                MainScreen(
-                    semanaId = semanaId,
-                    clientes = clientes,
-                    onNuevaSemana = { vm.crearNuevaSemana() },
-                    onAgregarCliente = { nombre -> vm.agregarCliente(semanaId!!, nombre) },
-                    onToggleEntregado = { cliente -> vm.toggleEntregado(cliente) },
-                    onEliminarCliente = { clienteConItems -> vm.eliminarCliente(clienteConItems) },
-                    onAbrirPedido = { clienteId, clienteNombre ->
+                MainAppShell(
+                    vm = vm,
+                    onAbrirPedido = { id, nombre ->
                         startActivity(
                             Intent(this, PedidoActivity::class.java).apply {
-                                putExtra("CLIENTE_ID", clienteId)
-                                putExtra("CLIENTE_NOMBRE", clienteNombre)
+                                putExtra("CLIENTE_ID", id)
+                                putExtra("CLIENTE_NOMBRE", nombre)
                             }
                         )
                     },
-                    onAbrirResumen = { id ->
+                    onAbrirResumen = { semanaId ->
                         startActivity(
                             Intent(this, ResumenActivity::class.java).apply {
-                                putExtra("SEMANA_ID", id)
+                                putExtra("SEMANA_ID", semanaId)
                             }
                         )
                     },
-                    onAbrirHistorial = {
-                        startActivity(Intent(this, HistorialActivity::class.java))
+                    onAbrirReportes = {
+                        startActivity(Intent(this, ReportesActivity::class.java))
                     }
                 )
             }
@@ -76,200 +66,435 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// ─── SHELL PRINCIPAL CON BOTTOM NAV ──────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(
-    semanaId: Long?,
-    clientes: List<ClienteConItems>,
-    onNuevaSemana: () -> Unit,
-    onAgregarCliente: (String) -> Unit,
-    onToggleEntregado: (Cliente) -> Unit,
-    onEliminarCliente: (ClienteConItems) -> Unit,
+fun MainAppShell(
+    vm: PanViewModel,
     onAbrirPedido: (Long, String) -> Unit,
     onAbrirResumen: (Long) -> Unit,
-    onAbrirHistorial: () -> Unit
+    onAbrirReportes: () -> Unit
 ) {
-    var showDialogNuevaSemana by remember { mutableStateOf(false) }
+    val semanaId     by vm.semanaActualId.collectAsStateWithLifecycle()
+    val semanaActual by vm.semanaActual.collectAsStateWithLifecycle(null)
+    val clientes     by remember(semanaId) {
+        semanaId?.let { vm.getClientesDeSemana(it) } ?: flowOf(emptyList())
+    }.collectAsStateWithLifecycle(emptyList())
+    val productos by vm.productos.collectAsStateWithLifecycle(emptyList())
+
+    var tabSeleccionado          by remember { mutableStateOf(0) }
+    var showDialogNuevaSemana    by remember { mutableStateOf(false) }
     var showDialogAgregarCliente by remember { mutableStateOf(false) }
-    var nuevoNombre by remember { mutableStateOf("") }
+    var showDialogAgregarProduct by remember { mutableStateOf(false) }
+    var copiarClientes           by remember { mutableStateOf(false) }
+
+    // ── Filtro del catálogo ───────────────────────────────────────────────────
+    var showFiltroCatalogo by remember { mutableStateOf(false) }
+    var filtroCatalogo     by remember { mutableStateOf("") }
+
+    // Resetear filtro al salir del tab de catálogo
+    LaunchedEffect(tabSeleccionado) {
+        if (tabSeleccionado != 1) {
+            showFiltroCatalogo = false
+            filtroCatalogo     = ""
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🥖 Pedidos de Pan", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text(
+                            when (tabSeleccionado) {
+                                1    -> "🧁 Catálogo de Productos"
+                                2    -> "📅 Historial"
+                                else -> "🥖 Pedidos de Pan"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize   = 18.sp
+                        )
+                        if (tabSeleccionado == 0 && semanaActual != null) {
+                            Text(
+                                semanaActual!!.etiqueta,
+                                fontSize = 12.sp,
+                                color    = MaterialTheme.colorScheme.onPrimaryContainer
+                                    .copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor   = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
-                    IconButton(onClick = onAbrirHistorial) {
-                        Icon(Icons.Default.History, contentDescription = "Historial")
+                    if (tabSeleccionado == 0 && semanaId != null) {
+                        IconButton(onClick = { onAbrirResumen(semanaId!!) }) {
+                            Icon(
+                                Icons.Default.Summarize,
+                                contentDescription = "Ver resumen de producción"
+                            )
+                        }
                     }
-                    if (semanaId != null) {
-                        IconButton(onClick = { onAbrirResumen(semanaId) }) {
-                            Icon(Icons.Default.Summarize, contentDescription = "Resumen")
+                    if (tabSeleccionado == 1) {
+                        IconButton(onClick = {
+                            showFiltroCatalogo = !showFiltroCatalogo
+                            if (!showFiltroCatalogo) filtroCatalogo = ""
+                        }) {
+                            Icon(
+                                if (showFiltroCatalogo) Icons.Default.Close
+                                else Icons.Default.Search,
+                                contentDescription = if (showFiltroCatalogo) "Cerrar filtro"
+                                                     else "Filtrar catálogo"
+                            )
                         }
                     }
                 }
             )
         },
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+                NavigationBarItem(
+                    selected = tabSeleccionado == 0,
+                    onClick  = { tabSeleccionado = 0 },
+                    icon     = { Icon(Icons.Default.Home, "Pedidos") },
+                    label    = { Text("Pedidos") }
+                )
+                NavigationBarItem(
+                    selected = tabSeleccionado == 1,
+                    onClick  = { tabSeleccionado = 1 },
+                    icon     = { Icon(Icons.Default.Category, "Catálogo") },
+                    label    = { Text("Catálogo") }
+                )
+                NavigationBarItem(
+                    selected = tabSeleccionado == 2,
+                    onClick  = { tabSeleccionado = 2 },
+                    icon     = { Icon(Icons.Default.DateRange, "Historial") },
+                    label    = { Text("Historial") }
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick  = onAbrirReportes,
+                    icon     = { Icon(Icons.Default.Assessment, "Reportes") },
+                    label    = { Text("Reportes") }
+                )
+            }
+        },
         floatingActionButton = {
-            if (semanaId != null) {
-                FloatingActionButton(onClick = { showDialogAgregarCliente = true }) {
-                    Icon(Icons.Default.PersonAdd, contentDescription = "Agregar cliente")
+            when (tabSeleccionado) {
+                0 -> if (semanaId != null) {
+                    FloatingActionButton(
+                        onClick          = { showDialogAgregarCliente = true },
+                        containerColor   = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(Icons.Default.PersonAdd, "Agregar cliente", tint = Color.White)
+                    }
                 }
+                1 -> FloatingActionButton(
+                    onClick        = { showDialogAgregarProduct = true },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, "Agregar producto", tint = Color.White)
+                }
+                else -> {}
             }
         }
     ) { innerPadding ->
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (semanaId == null) {
-                // Sin semana activa
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🍞", fontSize = 64.sp)
-                        Spacer(Modifier.height(16.dp))
-                        Text("No hay semana activa", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(8.dp))
-                        Button(onClick = { showDialogNuevaSemana = true }) {
-                            Icon(Icons.Default.Add, null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Iniciar nueva semana")
-                        }
-                    }
-                }
-            } else {
-                ResumenRapido(clientes = clientes)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Clientes (${clientes.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    TextButton(onClick = { showDialogNuevaSemana = true }) {
-                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Nueva semana")
-                    }
-                }
-
-                if (clientes.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("👤", fontSize = 48.sp)
-                            Text("Aún no hay clientes esta semana")
-                            Text("Toca ＋ para agregar uno", color = MaterialTheme.colorScheme.outline)
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(clientes, key = { it.cliente.id }) { clienteConItems ->
-                            TarjetaCliente(
-                                clienteConItems = clienteConItems,
-                                onClickEditar = {
-                                    onAbrirPedido(
-                                        clienteConItems.cliente.id,
-                                        clienteConItems.cliente.nombre
-                                    )
-                                },
-                                onToggleEntregado = { onToggleEntregado(clienteConItems.cliente) },
-                                onEliminar = { onEliminarCliente(clienteConItems) }
-                            )
-                        }
-                        item { Spacer(Modifier.height(80.dp)) }
-                    }
-                }
-            }
+        when (tabSeleccionado) {
+            0 -> PedidosTab(
+                modifier            = Modifier.padding(innerPadding),
+                semanaId            = semanaId,
+                clientes            = clientes,
+                productos           = productos,
+                onToggleEntregado   = { vm.toggleEntregado(it) },
+                onEliminarCliente   = { vm.eliminarCliente(it) },
+                onRenombrarCliente  = { c, n -> vm.actualizarNombreCliente(c, n) },
+                onActualizarNotas   = { c, n -> vm.actualizarNotasCliente(c, n) },
+                onAbrirPedido       = onAbrirPedido,
+                onShowNuevaSemana   = { showDialogNuevaSemana = true }
+            )
+            1 -> CatalogoTab(
+                modifier               = Modifier.padding(innerPadding),
+                productos              = productos,
+                filtro                 = filtroCatalogo,
+                showFiltro             = showFiltroCatalogo,
+                onFiltroChange         = { filtroCatalogo = it },
+                onAgregarProducto      = { cat, vari, precio, emoji ->
+                    vm.agregarProducto(cat, vari, precio, emoji)
+                },
+                onEditarProducto       = { vm.editarProducto(it) },
+                onEliminarProducto     = { vm.eliminarProducto(it) },
+                showDialogAgregar      = showDialogAgregarProduct,
+                onDismissDialogAgregar = { showDialogAgregarProduct = false }
+            )
+            else -> HistorialContent(
+                modifier  = Modifier.padding(innerPadding),
+                vm        = vm
+            )
         }
     }
 
-    // ─── DIÁLOGOS ────────────────────────────────────────────────────────────
-
+    // ─── DIÁLOGO: NUEVA SEMANA ────────────────────────────────────────────
     if (showDialogNuevaSemana) {
         AlertDialog(
-            onDismissRequest = { showDialogNuevaSemana = false },
-            title = { Text("¿Iniciar nueva semana?") },
-            text = { Text("Se creará una semana nueva. Los pedidos anteriores se guardan en el historial.") },
+            onDismissRequest = { showDialogNuevaSemana = false; copiarClientes = false },
+            title   = { Text("¿Iniciar nueva semana?") },
+            text    = {
+                Column {
+                    Text("Los pedidos anteriores quedan guardados en el Historial.")
+                    if (semanaId != null && clientes.isNotEmpty()) {
+                        Spacer(Modifier.height(14.dp))
+                        Surface(
+                            shape  = RoundedCornerShape(10.dp),
+                            color  = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier          = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked         = copiarClientes,
+                                    onCheckedChange = { copiarClientes = it }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Copiar los ${clientes.size} clientes a la nueva semana",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 Button(onClick = {
-                    onNuevaSemana()
+                    vm.crearNuevaSemana(if (copiarClientes && semanaId != null) semanaId else null)
+                    copiarClientes        = false
                     showDialogNuevaSemana = false
                 }) { Text("Sí, nueva semana") }
             },
             dismissButton = {
-                TextButton(onClick = { showDialogNuevaSemana = false }) { Text("Cancelar") }
+                TextButton(onClick = { showDialogNuevaSemana = false; copiarClientes = false }) {
+                    Text("Cancelar")
+                }
             }
         )
     }
 
+    // ─── DIÁLOGO: AGREGAR CLIENTE ─────────────────────────────────────────
     if (showDialogAgregarCliente) {
-        AlertDialog(
-            onDismissRequest = { showDialogAgregarCliente = false; nuevoNombre = "" },
-            title = { Text("Agregar cliente") },
-            text = {
-                OutlinedTextField(
-                    value = nuevoNombre,
-                    onValueChange = { nuevoNombre = it },
-                    label = { Text("Nombre del cliente") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+        DialogoAgregarCliente(
+            onAgregar = { nombre, notas ->
+                if (semanaId != null) vm.agregarCliente(semanaId!!, nombre, notas)
+                showDialogAgregarCliente = false
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (nuevoNombre.isNotBlank()) {
-                            onAgregarCliente(nuevoNombre.trim())
-                            nuevoNombre = ""
-                            showDialogAgregarCliente = false
-                        }
-                    },
-                    enabled = nuevoNombre.isNotBlank()
-                ) { Text("Agregar") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showDialogAgregarCliente = false
-                    nuevoNombre = ""
-                }) { Text("Cancelar") }
-            }
+            onDismiss = { showDialogAgregarCliente = false }
         )
     }
 }
 
-// ─── COMPONENTES ─────────────────────────────────────────────────────────────
+// ─── DIÁLOGO AGREGAR CLIENTE ──────────────────────────────────────────────────
+
+@Composable
+fun DialogoAgregarCliente(
+    onAgregar: (nombre: String, notas: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var notas  by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title   = { Text("Agregar cliente") },
+        text    = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value         = nombre,
+                    onValueChange = { nombre = it },
+                    label         = { Text("Nombre del cliente") },
+                    leadingIcon   = { Icon(Icons.Default.Person, null) },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value         = notas,
+                    onValueChange = { notas = it },
+                    label         = { Text("Notas (opcional)") },
+                    leadingIcon   = { Icon(Icons.Default.Note, null) },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick  = { if (nombre.isNotBlank()) onAgregar(nombre.trim(), notas.trim()) },
+                enabled  = nombre.isNotBlank(),
+                shape    = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.PersonAdd, null)
+                Spacer(Modifier.width(6.dp))
+                Text("Agregar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar") }
+        }
+    )
+}
+
+// ─── TAB PEDIDOS ──────────────────────────────────────────────────────────────
+
+@Composable
+fun PedidosTab(
+    modifier: Modifier = Modifier,
+    semanaId: Long?,
+    clientes: List<ClienteConItems>,
+    productos: List<Producto>,
+    onToggleEntregado: (Cliente) -> Unit,
+    onEliminarCliente: (ClienteConItems) -> Unit,
+    onRenombrarCliente: (Cliente, String) -> Unit,
+    onActualizarNotas: (Cliente, String) -> Unit,
+    onAbrirPedido: (Long, String) -> Unit,
+    onShowNuevaSemana: () -> Unit
+) {
+    if (semanaId == null) {
+        // Sin semana activa
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("🍞", fontSize = 72.sp)
+                Spacer(Modifier.height(20.dp))
+                Text(
+                    "No hay semana activa",
+                    style    = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Inicia una semana para comenzar a registrar pedidos",
+                    color    = MaterialTheme.colorScheme.outline,
+                    style    = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = onShowNuevaSemana,
+                    shape   = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Iniciar semana")
+                }
+            }
+        }
+        return
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        // ── Tarjeta resumen rápido ────────────────────────────────────
+        ResumenRapido(clientes = clientes)
+
+        // ── Encabezado lista de clientes ─────────────────────────────
+        Row(
+            modifier            = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment   = Alignment.CenterVertically
+        ) {
+            Text(
+                "Clientes (${clientes.size})",
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            TextButton(onClick = onShowNuevaSemana) {
+                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Nueva semana")
+            }
+        }
+
+        if (clientes.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("👤", fontSize = 48.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Aún no hay clientes esta semana")
+                    Text("Toca ＋ para agregar uno", color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        } else {
+            LazyColumn(
+                contentPadding      = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier            = Modifier.fillMaxSize()
+            ) {
+                items(clientes, key = { it.cliente.id }) { cc ->
+                    TarjetaCliente(
+                        clienteConItems    = cc,
+                        productos          = productos,
+                        onClickEditar      = { onAbrirPedido(cc.cliente.id, cc.cliente.nombre) },
+                        onToggleEntregado  = { onToggleEntregado(cc.cliente) },
+                        onEliminar         = { onEliminarCliente(cc) },
+                        onRenombrar        = { n -> onRenombrarCliente(cc.cliente, n) },
+                        onActualizarNotas  = { n -> onActualizarNotas(cc.cliente, n) }
+                    )
+                }
+                item { Spacer(Modifier.height(80.dp)) }
+            }
+        }
+    }
+}
+
+// ─── TARJETA RESUMEN RÁPIDO ───────────────────────────────────────────────────
 
 @Composable
 fun ResumenRapido(clientes: List<ClienteConItems>) {
-    val entregados = clientes.count { it.cliente.entregado }
+    val entregados  = clientes.count { it.cliente.entregado }
     val totalPiezas = clientes.sumOf { c -> c.items.sumOf { it.cantidad } }
     val totalDinero = clientes.sumOf { c -> c.items.sumOf { it.cantidad * it.precioUnitario } }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        colors   = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        shape    = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier              = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 14.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            DatoResumen("👥", "$entregados/${clientes.size}", "Entregados")
-            DatoResumen("🍞", "$totalPiezas", "Piezas")
-            DatoResumen("💰", "$${"%.0f".format(totalDinero)}", "Total")
+            DatoResumen(
+                emoji    = "👥",
+                valor    = "$entregados/${clientes.size}",
+                etiqueta = "Entregados"
+            )
+            VerticalDivider(
+                modifier = Modifier.height(40.dp),
+                color    = MaterialTheme.colorScheme.outlineVariant
+            )
+            DatoResumen(
+                emoji    = "🍞",
+                valor    = "$totalPiezas",
+                etiqueta = "Piezas"
+            )
+            VerticalDivider(
+                modifier = Modifier.height(40.dp),
+                color    = MaterialTheme.colorScheme.outlineVariant
+            )
+            DatoResumen(
+                emoji    = "💰",
+                valor    = "$${"%.0f".format(totalDinero)}",
+                etiqueta = "Total"
+            )
         }
     }
 }
@@ -277,131 +502,240 @@ fun ResumenRapido(clientes: List<ClienteConItems>) {
 @Composable
 fun DatoResumen(emoji: String, valor: String, etiqueta: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(emoji, fontSize = 20.sp)
-        Text(valor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(etiqueta, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondaryContainer)
+        Text(emoji, fontSize = 22.sp)
+        Spacer(Modifier.height(2.dp))
+        Text(valor, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+        Text(
+            etiqueta,
+            fontSize = 11.sp,
+            color    = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+        )
     }
 }
 
+// ─── TARJETA CLIENTE ─────────────────────────────────────────────────────────
+
 @Composable
 fun TarjetaCliente(
-    clienteConItems: ClienteConItems,
-    onClickEditar: () -> Unit,
+    clienteConItems:   ClienteConItems,
+    productos:         List<Producto>,
+    onClickEditar:     () -> Unit,
     onToggleEntregado: () -> Unit,
-    onEliminar: () -> Unit
+    onEliminar:        () -> Unit,
+    onRenombrar:       (String) -> Unit,
+    onActualizarNotas: (String) -> Unit
 ) {
-    val cliente = clienteConItems.cliente
-    val items = clienteConItems.items
+    val cliente    = clienteConItems.cliente
+    val items      = clienteConItems.items
     val totalPiezas = items.sumOf { it.cantidad }
     val totalDinero = items.sumOf { it.cantidad * it.precioUnitario }
-    var expandido by remember { mutableStateOf(false) }
-    var confirmDelete by remember { mutableStateOf(false) }
+
+    var expandido          by remember { mutableStateOf(false) }
+    var confirmDelete      by remember { mutableStateOf(false) }
+    var showMenu           by remember { mutableStateOf(false) }
+    var showRenombrar      by remember { mutableStateOf(false) }
+    var showEditarNotas    by remember { mutableStateOf(false) }
+    var nuevoNombreEdit    by remember { mutableStateOf("") }
+    var nuevasNotasEdit    by remember { mutableStateOf("") }
+
+    val entregado = cliente.entregado
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (cliente.entregado)
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            else MaterialTheme.colorScheme.surface
+        modifier  = Modifier.fillMaxWidth(),
+        shape     = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(if (entregado) 0.dp else 2.dp),
+        colors    = CardDefaults.cardColors(
+            containerColor = if (entregado)
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f)
+            else
+                MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            // ── Fila principal ────────────────────────────────────────
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                verticalAlignment   = Alignment.CenterVertically,
+                modifier            = Modifier.fillMaxWidth()
             ) {
+                // Avatar
                 Box(
-                    modifier = Modifier
-                        .size(40.dp)
+                    modifier         = Modifier
+                        .size(44.dp)
                         .clip(CircleShape)
                         .background(
-                            if (cliente.entregado) Color(0xFF4CAF50)
+                            if (entregado) MaterialTheme.colorScheme.tertiary
                             else MaterialTheme.colorScheme.primary
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         cliente.nombre.first().uppercaseChar().toString(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
+                        color      = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize   = 18.sp
                     )
                 }
+
                 Spacer(Modifier.width(12.dp))
+
+                // Nombre + stats + notas
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(cliente.nombre, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     Text(
-                        "$totalPiezas piezas · $${"%.0f".format(totalDinero)}",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.outline
+                        cliente.nombre,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize   = 16.sp
                     )
+                    if (items.isNotEmpty()) {
+                        Text(
+                            "$totalPiezas piezas · $${"%.0f".format(totalDinero)}",
+                            fontSize = 13.sp,
+                            color    = MaterialTheme.colorScheme.outline
+                        )
+                    } else {
+                        Text(
+                            "Sin productos — toca ✏️ para agregar",
+                            fontSize = 12.sp,
+                            color    = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    if (cliente.notas.isNotBlank()) {
+                        Text(
+                            "📝 ${cliente.notas}",
+                            fontSize   = 12.sp,
+                            color      = MaterialTheme.colorScheme.secondary,
+                            fontStyle  = FontStyle.Italic
+                        )
+                    }
                 }
+
+                // Botones de acción
                 IconButton(onClick = onToggleEntregado) {
                     Icon(
-                        if (cliente.entregado) Icons.Default.CheckCircle
+                        if (entregado) Icons.Default.CheckCircle
                         else Icons.Default.RadioButtonUnchecked,
-                        contentDescription = "Entregado",
-                        tint = if (cliente.entregado) Color(0xFF4CAF50)
-                        else MaterialTheme.colorScheme.outline
+                        contentDescription = if (entregado) "Marcar como pendiente" else "Marcar como entregado",
+                        tint               = if (entregado) MaterialTheme.colorScheme.tertiary
+                                             else MaterialTheme.colorScheme.outline
                     )
                 }
                 IconButton(onClick = onClickEditar) {
-                    Icon(Icons.Default.Edit, contentDescription = "Editar pedido")
-                }
-                IconButton(onClick = { confirmDelete = true }) {
                     Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Eliminar",
-                        tint = MaterialTheme.colorScheme.error
+                        Icons.Default.ShoppingCart,
+                        contentDescription = "Editar pedido",
+                        tint               = MaterialTheme.colorScheme.primary
                     )
+                }
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Más opciones")
+                    }
+                    DropdownMenu(
+                        expanded         = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text         = { Text("Renombrar") },
+                            leadingIcon  = { Icon(Icons.Default.DriveFileRenameOutline, null) },
+                            onClick      = {
+                                showMenu     = false
+                                nuevoNombreEdit = cliente.nombre
+                                showRenombrar = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text         = { Text("Editar notas") },
+                            leadingIcon  = { Icon(Icons.Default.Note, null) },
+                            onClick      = {
+                                showMenu        = false
+                                nuevasNotasEdit = cliente.notas
+                                showEditarNotas = true
+                            }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text         = {
+                                Text(
+                                    "Eliminar cliente",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            leadingIcon  = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
+                            onClick      = { showMenu = false; confirmDelete = true }
+                        )
+                    }
                 }
             }
 
+            // ── Detalle expandible ────────────────────────────────────
             if (items.isNotEmpty()) {
                 TextButton(
-                    onClick = { expandido = !expandido },
-                    modifier = Modifier.padding(top = 4.dp)
+                    onClick  = { expandido = !expandido },
+                    modifier = Modifier.padding(top = 2.dp)
                 ) {
-                    Text(if (expandido) "▲ Ocultar detalle" else "▼ Ver detalle")
+                    Icon(
+                        if (expandido) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (expandido) "Ocultar detalle" else "Ver detalle")
                 }
+
                 if (expandido) {
-                    items.forEach { item ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp, horizontal = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "${item.categoria}${if (item.variante.isNotBlank()) " - ${item.variante}" else ""}",
-                                fontSize = 13.sp
-                            )
-                            Text("×${item.cantidad}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Surface(
+                        shape  = RoundedCornerShape(10.dp),
+                        color  = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            items.forEach { item ->
+                                val emoji = productos
+                                    .find { it.categoria == item.categoria && it.variante == item.variante }
+                                    ?.emoji ?: "🍞"
+                                Row(
+                                    modifier              = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "$emoji ${item.variante.ifBlank { item.categoria }}",
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        "×${item.cantidad}",
+                                        fontSize   = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color      = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-            } else {
-                Text(
-                    "Sin productos aún · toca ✏️ para agregar",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
             }
         }
     }
 
+    // ─── DIALOGS ──────────────────────────────────────────────────────────
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("¿Eliminar cliente?") },
-            text = { Text("Se eliminarán todos los pedidos de ${cliente.nombre}.") },
+            title   = { Text("¿Eliminar cliente?") },
+            text    = { Text("Se eliminarán todos los pedidos de ${cliente.nombre}.") },
             confirmButton = {
                 Button(
                     onClick = { onEliminar(); confirmDelete = false },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors  = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
                 ) { Text("Eliminar") }
             },
             dismissButton = {
@@ -409,22 +743,61 @@ fun TarjetaCliente(
             }
         )
     }
-}
 
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun MainScreenPreview() {
-    PanAppTheme {
-        MainScreen(
-            semanaId = 1L,
-            clientes = emptyList(),
-            onNuevaSemana = {},
-            onAgregarCliente = {},
-            onToggleEntregado = {},
-            onEliminarCliente = {},
-            onAbrirPedido = { _, _ -> },
-            onAbrirResumen = {},
-            onAbrirHistorial = {}
+    if (showRenombrar) {
+        AlertDialog(
+            onDismissRequest = { showRenombrar = false },
+            title   = { Text("Renombrar cliente") },
+            text    = {
+                OutlinedTextField(
+                    value         = nuevoNombreEdit,
+                    onValueChange = { nuevoNombreEdit = it },
+                    label         = { Text("Nuevo nombre") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick  = {
+                        if (nuevoNombreEdit.isNotBlank()) {
+                            onRenombrar(nuevoNombreEdit.trim())
+                            showRenombrar = false
+                        }
+                    },
+                    enabled  = nuevoNombreEdit.isNotBlank()
+                ) { Text("Guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenombrar = false }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    if (showEditarNotas) {
+        AlertDialog(
+            onDismissRequest = { showEditarNotas = false },
+            title   = { Text("Notas de ${cliente.nombre}") },
+            text    = {
+                OutlinedTextField(
+                    value         = nuevasNotasEdit,
+                    onValueChange = { nuevasNotasEdit = it },
+                    label         = { Text("Notas") },
+                    placeholder   = { Text("Dirección, preferencias, alergias…") },
+                    singleLine    = false,
+                    maxLines      = 4,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    onActualizarNotas(nuevasNotasEdit.trim())
+                    showEditarNotas = false
+                }) { Text("Guardar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditarNotas = false }) { Text("Cancelar") }
+            }
         )
     }
 }

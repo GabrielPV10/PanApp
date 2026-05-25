@@ -52,10 +52,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // ── Lifecycle ─────────────────────────────────────────────────
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")  // ← bajado
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.3")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.3")
-    implementation(libs.androidx.ui.tooling.preview)
-    debugImplementation(libs.androidx.ui.tooling)   // ← bajado
 
     // ── Room ──────────────────────────────────────────────────────
     val roomVersion = "2.6.1"

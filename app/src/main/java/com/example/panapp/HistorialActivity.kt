@@ -85,6 +85,43 @@ fun HistorialScreen(vm: PanViewModel, onVolver: () -> Unit) {
     }
 }
 
+// ─── CONTENIDO SIN SCAFFOLD (para tab en MainActivity) ───────────────────────
+
+@Composable
+fun HistorialContent(modifier: Modifier = Modifier, vm: PanViewModel) {
+    val historial by vm.historial.collectAsStateWithLifecycle(emptyList())
+
+    if (historial.isEmpty()) {
+        Box(
+            modifier         = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("📅", fontSize = 64.sp)
+                Spacer(Modifier.height(16.dp))
+                Text("Aún no hay semanas anteriores", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Las semanas cerradas aparecerán aquí",
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier       = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(historial) { semanaConClientes ->
+                TarjetaHistorial(semanaConClientes)
+            }
+        }
+    }
+}
+
+// ─── TARJETA DE SEMANA HISTÓRICA ─────────────────────────────────────────────
+
 @Composable
 fun TarjetaHistorial(semanaConClientes: SemanaConClientes) {
     var expandida by remember { mutableStateOf(false) }

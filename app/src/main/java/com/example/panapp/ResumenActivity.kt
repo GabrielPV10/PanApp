@@ -56,6 +56,7 @@ fun ResumenScreen(
         .collectAsStateWithLifecycle(emptyList())
 
     val totalPiezas = resumenItems.sumOf { it.totalCantidad }
+    val totalDinero = resumenItems.sumOf { it.totalPrecio }
     val porCategoria = resumenItems.groupBy { it.categoria }
 
     Scaffold(
@@ -77,7 +78,7 @@ fun ResumenScreen(
                 ),
                 actions = {
                     IconButton(onClick = {
-                        compartirResumen(context, resumenItems, totalPiezas)
+                        compartirResumen(context, resumenItems, totalPiezas, totalDinero)
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "Compartir")
                     }
@@ -127,12 +128,20 @@ fun ResumenScreen(
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 16.sp
                             )
-                            Text(
-                                "$totalPiezas piezas",
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 24.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    "$totalPiezas piezas",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 24.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    "💰 $${"%.0f".format(totalDinero)}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
                         }
                     }
                 }
@@ -215,7 +224,7 @@ fun ResumenScreen(
                 // Botón compartir al final
                 item {
                     Button(
-                        onClick = { compartirResumen(context, resumenItems, totalPiezas) },
+                        onClick = { compartirResumen(context, resumenItems, totalPiezas, totalDinero) },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Share, null)
@@ -231,7 +240,8 @@ fun ResumenScreen(
 fun compartirResumen(
     context: android.content.Context,
     items: List<ResumenItem>,
-    totalPiezas: Int
+    totalPiezas: Int,
+    totalDinero: Double
 ) {
     val sb = StringBuilder()
     sb.appendLine("🥖 *PEDIDO DE PRODUCCIÓN* 🥖")
@@ -246,7 +256,7 @@ fun compartirResumen(
     }
 
     sb.appendLine("─────────────────────────")
-    sb.appendLine("*TOTAL: $totalPiezas piezas*")
+    sb.appendLine("*TOTAL: $totalPiezas piezas · \$${"%.0f".format(totalDinero)}*")
 
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
