@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\perez\\\\AndroidStudioProjects\\\\PanApp\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Format-Table)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(./gradlew assembleDebug --stacktrace)",
+      "Bash(./gradlew :app:compileDebugKotlin)",
+      "Bash(./gradlew :app:compileDebugKotlin --continue)",
+      "Bash(git stash *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\perez\\\\AndroidStudioProjects\\\\DespensaGO\" -Recurse -Force)",
+      "Bash(Select-Object FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(Get-ChildItem -Recurse \"C:\\\\Users\\\\perez\\\\AndroidStudioProjects\\\\DespensaGO\\\\app\\\\src\\\\main\\\\java\" -Filter \"*.kt\")",
+      "Bash(Select-Object FullName)",
+      "Bash(./gradlew assembleDebug --daemon)",
+      "Bash(Get-ChildItem -Recurse \"C:\\\\Users\\\\perez\\\\AndroidStudioProjects\\\\ElChismoso\" -File)"
+    ]
+  }
+}

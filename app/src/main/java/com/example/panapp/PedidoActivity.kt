@@ -10,6 +10,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -119,6 +120,15 @@ fun PedidoScreen(
 
     // ── Scaffold ──────────────────────────────────────────────────────────────
     Scaffold(
+        bottomBar = {
+            if (totalPiezas > 0) {
+                BarraTotalPedido(
+                    totalPiezas = totalPiezas,
+                    totalDinero = totalDinero,
+                    onGuardar   = { guardar() }
+                )
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -149,15 +159,10 @@ fun PedidoScreen(
                             contentDescription = if (showBusqueda) "Cerrar búsqueda" else "Buscar producto"
                         )
                     }
-                    // Limpiar y guardar solo cuando no hay búsqueda activa
-                    if (!showBusqueda) {
-                        if (totalPiezas > 0) {
-                            IconButton(onClick = { showConfirmLimpiar = true }) {
-                                Icon(Icons.Default.DeleteSweep, contentDescription = "Limpiar pedido")
-                            }
-                        }
-                        IconButton(onClick = { guardar() }) {
-                            Icon(Icons.Default.Save, contentDescription = "Guardar")
+                    // Limpiar solo cuando no hay búsqueda activa y hay items
+                    if (!showBusqueda && totalPiezas > 0) {
+                        IconButton(onClick = { showConfirmLimpiar = true }) {
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "Limpiar pedido")
                         }
                     }
                 }
@@ -361,6 +366,69 @@ fun FilaProducto(
                 )
             ) {
                 Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+// ─── BARRA DE TOTAL FIJA ──────────────────────────────────────────────────────
+
+@Composable
+fun BarraTotalPedido(
+    totalPiezas: Int,
+    totalDinero: Double,
+    onGuardar: () -> Unit
+) {
+    Surface(
+        tonalElevation  = 3.dp,
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "$totalPiezas",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize   = 26.sp,
+                        color      = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "piezas",
+                        fontSize = 11.sp,
+                        color    = MaterialTheme.colorScheme.outline
+                    )
+                }
+                VerticalDivider(modifier = Modifier.height(36.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "$${"%.0f".format(totalDinero)}",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize   = 26.sp
+                    )
+                    Text(
+                        "total",
+                        fontSize = 11.sp,
+                        color    = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+            Button(
+                onClick = onGuardar,
+                shape   = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Default.Save, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Guardar", fontWeight = FontWeight.SemiBold)
             }
         }
     }
