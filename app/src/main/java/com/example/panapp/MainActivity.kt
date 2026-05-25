@@ -230,8 +230,9 @@ fun MainAppShell(
                 onDismissDialogAgregar = { showDialogAgregarProduct = false }
             )
             else -> HistorialContent(
-                modifier  = Modifier.padding(innerPadding),
-                vm        = vm
+                modifier     = Modifier.padding(innerPadding),
+                vm           = vm,
+                onVerResumen = onAbrirResumen
             )
         }
     }

@@ -17,6 +17,9 @@ interface SemanaDao {
     @Insert
     suspend fun insert(semana: Semana): Long
 
+    @Update
+    suspend fun update(semana: Semana)
+
     @Delete
     suspend fun delete(semana: Semana)
 }
@@ -34,6 +37,10 @@ interface ClienteDao {
     @Transaction
     @Query("SELECT * FROM semanas ORDER BY id DESC")
     fun getHistorial(): Flow<List<SemanaConClientes>>
+
+    @Transaction
+    @Query("SELECT * FROM semanas WHERE id != :semanaActivaId ORDER BY id DESC")
+    fun getHistorialExcluyendo(semanaActivaId: Long): Flow<List<SemanaConClientes>>
 
     @Insert
     suspend fun insertCliente(cliente: Cliente): Long

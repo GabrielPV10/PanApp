@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [Semana::class, Cliente::class, ItemPedido::class, Producto::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class PanDatabase : RoomDatabase() {
@@ -40,6 +40,13 @@ abstract class PanDatabase : RoomDatabase() {
             }
         }
 
+        /** Migración 2 → 3: agrega fecha de cierre a semanas */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE semanas ADD COLUMN fechaCierre TEXT")
+            }
+        }
+
         fun getInstance(context: Context): PanDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -47,7 +54,7 @@ abstract class PanDatabase : RoomDatabase() {
                     PanDatabase::class.java,
                     "pan_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { db ->
                         INSTANCE = db

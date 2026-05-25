@@ -8,6 +8,7 @@ import androidx.room.*
 data class Semana(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val fechaInicio: String,
+    val fechaCierre: String? = null,
     val etiqueta: String
 )
 

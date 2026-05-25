@@ -34,6 +34,13 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun crearNuevaSemana(copiarDeSemanaId: Long? = null) = viewModelScope.launch {
+        // Cerrar la semana activa antes de crear la nueva
+        _semanaActualId.value?.let { id ->
+            semanaDao.getById(id).first()?.let { semanaAnterior ->
+                semanaDao.update(semanaAnterior.copy(fechaCierre = LocalDate.now().toString()))
+            }
+        }
+
         val hoy = LocalDate.now()
         val fmt = DateTimeFormatter.ofPattern("dd MMM yyyy")
         val semana = Semana(
@@ -108,7 +115,11 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
 
     // ─── HISTORIAL ───────────────────────────────────────────────────────────
 
-    val historial: Flow<List<SemanaConClientes>> = clienteDao.getHistorial()
+    // Excluye la semana activa para que no aparezca duplicada en el historial
+    val historial: Flow<List<SemanaConClientes>> = _semanaActualId.flatMapLatest { id ->
+        if (id != null) clienteDao.getHistorialExcluyendo(id)
+        else clienteDao.getHistorial()
+    }
 
     // ─── CATÁLOGO DE PRODUCTOS ───────────────────────────────────────────────
 
