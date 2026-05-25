@@ -18,6 +18,7 @@ data class Cliente(
     val semanaId: Long,
     val nombre: String,
     val entregado: Boolean = false,
+    val pagado: Boolean = false,
     val notas: String = ""
 )
 

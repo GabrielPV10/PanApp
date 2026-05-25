@@ -72,6 +72,10 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
         clienteDao.updateCliente(cliente.copy(entregado = !cliente.entregado))
     }
 
+    fun togglePagado(cliente: Cliente) = viewModelScope.launch {
+        clienteDao.updateCliente(cliente.copy(pagado = !cliente.pagado))
+    }
+
     fun eliminarCliente(clienteConItems: ClienteConItems) = viewModelScope.launch {
         itemDao.deleteItemsDeCliente(clienteConItems.cliente.id)
         clienteDao.deleteCliente(clienteConItems.cliente)

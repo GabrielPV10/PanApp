@@ -209,6 +209,7 @@ fun MainAppShell(
                 clientes            = clientes,
                 productos           = productos,
                 onToggleEntregado   = { vm.toggleEntregado(it) },
+                onTogglePagado      = { vm.togglePagado(it) },
                 onEliminarCliente   = { vm.eliminarCliente(it) },
                 onRenombrarCliente  = { c, n -> vm.actualizarNombreCliente(c, n) },
                 onActualizarNotas   = { c, n -> vm.actualizarNotasCliente(c, n) },
@@ -288,6 +289,7 @@ fun MainAppShell(
     // ─── DIÁLOGO: AGREGAR CLIENTE ─────────────────────────────────────────
     if (showDialogAgregarCliente) {
         DialogoAgregarCliente(
+            clientesExistentes = clientes,
             onAgregar = { nombre, notas ->
                 if (semanaId != null) vm.agregarCliente(semanaId!!, nombre, notas)
                 showDialogAgregarCliente = false
@@ -301,11 +303,15 @@ fun MainAppShell(
 
 @Composable
 fun DialogoAgregarCliente(
+    clientesExistentes: List<ClienteConItems> = emptyList(),
     onAgregar: (nombre: String, notas: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var nombre by remember { mutableStateOf("") }
     var notas  by remember { mutableStateOf("") }
+
+    val nombreDuplicado = nombre.isNotBlank() &&
+        clientesExistentes.any { it.cliente.nombre.equals(nombre.trim(), ignoreCase = true) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -317,6 +323,10 @@ fun DialogoAgregarCliente(
                     onValueChange = { nombre = it },
                     label         = { Text("Nombre del cliente") },
                     leadingIcon   = { Icon(Icons.Default.Person, null) },
+                    isError       = nombreDuplicado,
+                    supportingText = if (nombreDuplicado) {
+                        { Text("Ya existe un cliente con este nombre") }
+                    } else null,
                     singleLine    = true,
                     modifier      = Modifier.fillMaxWidth()
                 )
@@ -332,8 +342,8 @@ fun DialogoAgregarCliente(
         },
         confirmButton = {
             Button(
-                onClick  = { if (nombre.isNotBlank()) onAgregar(nombre.trim(), notas.trim()) },
-                enabled  = nombre.isNotBlank(),
+                onClick  = { if (nombre.isNotBlank() && !nombreDuplicado) onAgregar(nombre.trim(), notas.trim()) },
+                enabled  = nombre.isNotBlank() && !nombreDuplicado,
                 shape    = RoundedCornerShape(12.dp)
             ) {
                 Icon(Icons.Default.PersonAdd, null)
@@ -356,6 +366,7 @@ fun PedidosTab(
     clientes: List<ClienteConItems>,
     productos: List<Producto>,
     onToggleEntregado: (Cliente) -> Unit,
+    onTogglePagado: (Cliente) -> Unit,
     onEliminarCliente: (ClienteConItems) -> Unit,
     onRenombrarCliente: (Cliente, String) -> Unit,
     onActualizarNotas: (Cliente, String) -> Unit,
@@ -438,6 +449,7 @@ fun PedidosTab(
                         productos          = productos,
                         onClickEditar      = { onAbrirPedido(cc.cliente.id, cc.cliente.nombre) },
                         onToggleEntregado  = { onToggleEntregado(cc.cliente) },
+                        onTogglePagado     = { onTogglePagado(cc.cliente) },
                         onEliminar         = { onEliminarCliente(cc) },
                         onRenombrar        = { n -> onRenombrarCliente(cc.cliente, n) },
                         onActualizarNotas  = { n -> onActualizarNotas(cc.cliente, n) }
@@ -454,48 +466,67 @@ fun PedidosTab(
 @Composable
 fun ResumenRapido(clientes: List<ClienteConItems>) {
     val entregados  = clientes.count { it.cliente.entregado }
+    val cobrados    = clientes.count { it.cliente.pagado }
     val totalPiezas = clientes.sumOf { c -> c.items.sumOf { it.cantidad } }
     val totalDinero = clientes.sumOf { c -> c.items.sumOf { it.cantidad * it.precioUnitario } }
 
     Card(
-        modifier = Modifier
+        modifier  = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        colors   = CardDefaults.cardColors(
+        colors    = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
-        shape    = RoundedCornerShape(16.dp),
+        shape     = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
-        Row(
-            modifier              = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 14.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            DatoResumen(
-                emoji    = "👥",
-                valor    = "$entregados/${clientes.size}",
-                etiqueta = "Entregados"
-            )
-            VerticalDivider(
-                modifier = Modifier.height(40.dp),
+        Column(modifier = Modifier.padding(vertical = 10.dp)) {
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                DatoResumen(
+                    emoji    = "👥",
+                    valor    = "$entregados/${clientes.size}",
+                    etiqueta = "Entregados"
+                )
+                VerticalDivider(
+                    modifier = Modifier.height(40.dp),
+                    color    = MaterialTheme.colorScheme.outlineVariant
+                )
+                DatoResumen(
+                    emoji    = "💰",
+                    valor    = "$cobrados/${clientes.size}",
+                    etiqueta = "Cobrados"
+                )
+            }
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 16.dp),
                 color    = MaterialTheme.colorScheme.outlineVariant
             )
-            DatoResumen(
-                emoji    = "🍞",
-                valor    = "$totalPiezas",
-                etiqueta = "Piezas"
-            )
-            VerticalDivider(
-                modifier = Modifier.height(40.dp),
-                color    = MaterialTheme.colorScheme.outlineVariant
-            )
-            DatoResumen(
-                emoji    = "💰",
-                valor    = "$${"%.0f".format(totalDinero)}",
-                etiqueta = "Total"
-            )
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                DatoResumen(
+                    emoji    = "🍞",
+                    valor    = "$totalPiezas",
+                    etiqueta = "Piezas"
+                )
+                VerticalDivider(
+                    modifier = Modifier.height(40.dp),
+                    color    = MaterialTheme.colorScheme.outlineVariant
+                )
+                DatoResumen(
+                    emoji    = "💵",
+                    valor    = "$${"%.0f".format(totalDinero)}",
+                    etiqueta = "Total"
+                )
+            }
         }
     }
 }
@@ -522,6 +553,7 @@ fun TarjetaCliente(
     productos:         List<Producto>,
     onClickEditar:     () -> Unit,
     onToggleEntregado: () -> Unit,
+    onTogglePagado:    () -> Unit,
     onEliminar:        () -> Unit,
     onRenombrar:       (String) -> Unit,
     onActualizarNotas: (String) -> Unit
@@ -540,6 +572,7 @@ fun TarjetaCliente(
     var nuevasNotasEdit    by remember { mutableStateOf("") }
 
     val entregado = cliente.entregado
+    val pagado    = cliente.pagado
 
     Card(
         modifier  = Modifier.fillMaxWidth(),
@@ -616,6 +649,14 @@ fun TarjetaCliente(
                         else Icons.Default.RadioButtonUnchecked,
                         contentDescription = if (entregado) "Marcar como pendiente" else "Marcar como entregado",
                         tint               = if (entregado) MaterialTheme.colorScheme.tertiary
+                                             else MaterialTheme.colorScheme.outline
+                    )
+                }
+                IconButton(onClick = onTogglePagado) {
+                    Icon(
+                        Icons.Default.MonetizationOn,
+                        contentDescription = if (pagado) "Marcar como no cobrado" else "Marcar como cobrado",
+                        tint               = if (pagado) MaterialTheme.colorScheme.primary
                                              else MaterialTheme.colorScheme.outline
                     )
                 }
