@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.panapp.database.Producto
+import com.example.panapp.ui.InicialChip
 import com.example.panapp.ui.theme.PanAppTheme
 import kotlinx.coroutines.flow.first
 
@@ -235,7 +236,11 @@ fun PedidoScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("🔍", fontSize = 52.sp)
+                            Icon(
+                                Icons.Default.SearchOff, null,
+                                modifier = Modifier.size(52.dp),
+                                tint = MaterialTheme.colorScheme.outline
+                            )
                             Spacer(Modifier.height(10.dp))
                             Text(
                                 "Sin resultados para «$busqueda»",
@@ -269,12 +274,20 @@ fun PedidoScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment     = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        "${prodsCategoria.firstOrNull()?.emoji ?: "🍞"} $categoria",
-                                        style      = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color      = MaterialTheme.colorScheme.primary
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        InicialChip(
+                                            texto    = categoria,
+                                            size     = 28.dp,
+                                            fontSize = 13.sp
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Text(
+                                            categoria,
+                                            style      = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color      = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                     if (totalCategoria > 0) {
                                         Badge { Text("$totalCategoria") }
                                     }
@@ -321,9 +334,15 @@ fun FilaProducto(
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        InicialChip(
+            texto    = producto.variante.ifBlank { producto.categoria },
+            size     = 34.dp,
+            fontSize = 14.sp
+        )
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text       = "${producto.emoji} ${producto.variante.ifBlank { producto.categoria }}",
+                text       = producto.variante.ifBlank { producto.categoria },
                 fontWeight = if (cantidad > 0) FontWeight.SemiBold else FontWeight.Normal,
                 color      = if (cantidad > 0) MaterialTheme.colorScheme.onSurface
                              else MaterialTheme.colorScheme.outline

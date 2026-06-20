@@ -112,9 +112,9 @@ fun MainAppShell(
                     Column {
                         Text(
                             when (tabSeleccionado) {
-                                1    -> "🧁 Catálogo de Productos"
-                                2    -> "📅 Historial"
-                                else -> "🥖 Pedidos de Pan"
+                                1    -> "Catálogo de Productos"
+                                2    -> "Historial"
+                                else -> "Pedidos de Pan"
                             },
                             fontWeight = FontWeight.Bold,
                             fontSize   = 18.sp
@@ -211,7 +211,6 @@ fun MainAppShell(
                 modifier            = Modifier.padding(innerPadding),
                 semanaId            = semanaId,
                 clientesState       = clientesState,
-                productos           = productos,
                 onToggleEntregado   = { vm.toggleEntregado(it) },
                 onTogglePagado      = { vm.togglePagado(it) },
                 onEliminarCliente   = { vm.eliminarCliente(it) },
@@ -368,7 +367,6 @@ fun PedidosTab(
     modifier: Modifier = Modifier,
     semanaId: Long?,
     clientesState: UiState<List<ClienteConItems>>,
-    productos: List<Producto>,
     onToggleEntregado: (Cliente) -> Unit,
     onTogglePagado: (Cliente) -> Unit,
     onEliminarCliente: (ClienteConItems) -> Unit,
@@ -381,7 +379,11 @@ fun PedidosTab(
         // Sin semana activa
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("🍞", fontSize = 72.sp)
+                Icon(
+                    Icons.Default.CalendarMonth, null,
+                    modifier = Modifier.size(72.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
                 Spacer(Modifier.height(20.dp))
                 Text(
                     "No hay semana activa",
@@ -418,7 +420,11 @@ fun PedidosTab(
     if (clientesState is UiState.Error) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⚠️", fontSize = 48.sp)
+                Icon(
+                    Icons.Default.ErrorOutline, null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
                 Spacer(Modifier.height(8.dp))
                 Text("No se pudieron cargar los clientes")
                 Text(clientesState.message, color = MaterialTheme.colorScheme.outline)
@@ -456,10 +462,14 @@ fun PedidosTab(
         if (clientes.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("👤", fontSize = 48.sp)
+                    Icon(
+                        Icons.Default.PersonOff, null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
                     Spacer(Modifier.height(8.dp))
                     Text("Aún no hay clientes esta semana")
-                    Text("Toca ＋ para agregar uno", color = MaterialTheme.colorScheme.outline)
+                    Text("Toca + para agregar uno", color = MaterialTheme.colorScheme.outline)
                 }
             }
         } else {
@@ -471,7 +481,6 @@ fun PedidosTab(
                 items(clientes, key = { it.cliente.id }) { cc ->
                     TarjetaCliente(
                         clienteConItems    = cc,
-                        productos          = productos,
                         onClickEditar      = { onAbrirPedido(cc.cliente.id, cc.cliente.nombre) },
                         onToggleEntregado  = { onToggleEntregado(cc.cliente) },
                         onTogglePagado     = { onTogglePagado(cc.cliente) },
@@ -513,7 +522,7 @@ fun ResumenRapido(clientes: List<ClienteConItems>) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 DatoResumen(
-                    emoji    = "👥",
+                    icon     = Icons.Default.CheckCircle,
                     valor    = "$entregados/${clientes.size}",
                     etiqueta = "Entregados"
                 )
@@ -522,7 +531,7 @@ fun ResumenRapido(clientes: List<ClienteConItems>) {
                     color    = MaterialTheme.colorScheme.outlineVariant
                 )
                 DatoResumen(
-                    emoji    = "💰",
+                    icon     = Icons.Default.MonetizationOn,
                     valor    = "$cobrados/${clientes.size}",
                     etiqueta = "Cobrados"
                 )
@@ -538,7 +547,7 @@ fun ResumenRapido(clientes: List<ClienteConItems>) {
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 DatoResumen(
-                    emoji    = "🍞",
+                    icon     = Icons.Default.BakeryDining,
                     valor    = "$totalPiezas",
                     etiqueta = "Piezas"
                 )
@@ -547,7 +556,7 @@ fun ResumenRapido(clientes: List<ClienteConItems>) {
                     color    = MaterialTheme.colorScheme.outlineVariant
                 )
                 DatoResumen(
-                    emoji    = "💵",
+                    icon     = Icons.Default.Payments,
                     valor    = "$${"%.0f".format(totalDinero)}",
                     etiqueta = "Total"
                 )
@@ -557,9 +566,13 @@ fun ResumenRapido(clientes: List<ClienteConItems>) {
 }
 
 @Composable
-fun DatoResumen(emoji: String, valor: String, etiqueta: String) {
+fun DatoResumen(icon: androidx.compose.ui.graphics.vector.ImageVector, valor: String, etiqueta: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(emoji, fontSize = 22.sp)
+        Icon(
+            icon, null,
+            modifier = Modifier.size(22.dp),
+            tint = MaterialTheme.colorScheme.onSecondaryContainer
+        )
         Spacer(Modifier.height(2.dp))
         Text(valor, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
         Text(
@@ -575,7 +588,6 @@ fun DatoResumen(emoji: String, valor: String, etiqueta: String) {
 @Composable
 fun TarjetaCliente(
     clienteConItems:   ClienteConItems,
-    productos:         List<Producto>,
     onClickEditar:     () -> Unit,
     onToggleEntregado: () -> Unit,
     onTogglePagado:    () -> Unit,
@@ -652,7 +664,7 @@ fun TarjetaCliente(
                         )
                     } else {
                         Text(
-                            "Sin productos — toca ✏️ para agregar",
+                            "Sin productos — toca el carrito para agregar",
                             fontSize = 12.sp,
                             color    = MaterialTheme.colorScheme.outline
                         )
@@ -762,9 +774,6 @@ fun TarjetaCliente(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             items.forEach { item ->
-                                val emoji = productos
-                                    .find { it.categoria == item.categoria && it.variante == item.variante }
-                                    ?.emoji ?: "🍞"
                                 Row(
                                     modifier              = Modifier
                                         .fillMaxWidth()
@@ -772,7 +781,7 @@ fun TarjetaCliente(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        "$emoji ${item.variante.ifBlank { item.categoria }}",
+                                        item.variante.ifBlank { item.categoria },
                                         fontSize = 13.sp
                                     )
                                     Text(

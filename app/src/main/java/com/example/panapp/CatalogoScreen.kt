@@ -3,13 +3,9 @@ package com.example.panapp
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -25,6 +21,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.panapp.database.Producto
+import com.example.panapp.ui.InicialChip
 
 // ─── TAB CATÁLOGO ─────────────────────────────────────────────────────────────
 
@@ -146,7 +143,11 @@ fun CatalogoTab(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🍞", fontSize = 64.sp)
+                        Icon(
+                            Icons.Default.Storefront, null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
                         Spacer(Modifier.height(16.dp))
                         Text("Catálogo vacío", style = MaterialTheme.typography.headlineSmall)
                         Spacer(Modifier.height(8.dp))
@@ -164,7 +165,11 @@ fun CatalogoTab(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🔍", fontSize = 52.sp)
+                        Icon(
+                            Icons.Default.SearchOff, null,
+                            modifier = Modifier.size(52.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
                         Spacer(Modifier.height(10.dp))
                         Text(
                             "Sin resultados para «$filtro»",
@@ -197,7 +202,11 @@ fun CatalogoTab(
                                     modifier          = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(prods.firstOrNull()?.emoji ?: "🍞", fontSize = 22.sp)
+                                    InicialChip(
+                                        texto    = categoria,
+                                        size     = 32.dp,
+                                        fontSize = 14.sp
+                                    )
                                     Spacer(Modifier.width(12.dp))
                                     Text(
                                         categoria,
@@ -250,9 +259,15 @@ fun TarjetaProducto(
             .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        InicialChip(
+            texto    = producto.variante.ifBlank { producto.categoria },
+            size     = 36.dp,
+            fontSize = 15.sp
+        )
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "${producto.emoji} ${producto.variante.ifBlank { producto.categoria }}",
+                producto.variante.ifBlank { producto.categoria },
                 fontSize = 15.sp
             )
             Text(
@@ -312,7 +327,7 @@ fun DialogoProducto(
     onGuardar: (categoria: String, variante: String, precio: Double, emoji: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var emoji          by remember { mutableStateOf(productoExistente?.emoji     ?: "🍞") }
+    val emoji          = productoExistente?.emoji ?: "🍞"
     var categoria      by remember { mutableStateOf(productoExistente?.categoria  ?: "") }
     var nuevaCategoria by remember { mutableStateOf("") }
     var variante       by remember { mutableStateOf(productoExistente?.variante   ?: "") }
@@ -332,39 +347,12 @@ fun DialogoProducto(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                if (productoExistente != null) "✏️ Editar producto" else "🆕 Nuevo producto",
+                if (productoExistente != null) "Editar producto" else "Nuevo producto",
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-
-                // ── Selector de emoji ──────────────────────────────────────────
-                Text("Emoji del producto", style = MaterialTheme.typography.labelLarge)
-                Row(
-                    modifier              = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf("🍩","🥧","🍞","🥖","🎂","🍪","🧁","🍫","🥐","🌀","🥨","🫓","🧇","🧆").forEach { e ->
-                        OutlinedButton(
-                            onClick = { emoji = e },
-                            shape   = CircleShape,
-                            border  = BorderStroke(
-                                width = if (emoji == e) 2.dp else 1.dp,
-                                color = if (emoji == e) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.outlineVariant
-                            ),
-                            colors  = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (emoji == e) MaterialTheme.colorScheme.primaryContainer
-                                                 else MaterialTheme.colorScheme.surface
-                            ),
-                            contentPadding = PaddingValues(6.dp),
-                            modifier       = Modifier.size(44.dp)
-                        ) {
-                            Text(e, fontSize = 18.sp)
-                        }
-                    }
-                }
 
                 // ── Selector de categoría ──────────────────────────────────────
                 ExposedDropdownMenuBox(
@@ -374,7 +362,7 @@ fun DialogoProducto(
                     OutlinedTextField(
                         value         = when {
                             categoria.isBlank() -> ""
-                            esNueva             -> "✚ Nueva categoría"
+                            esNueva             -> "Nueva categoría"
                             else                -> categoria
                         },
                         onValueChange = {},
@@ -397,7 +385,7 @@ fun DialogoProducto(
                         DropdownMenuItem(
                             text    = {
                                 Text(
-                                    "✚ Nueva categoría",
+                                    "+ Nueva categoría",
                                     color      = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
                                 )

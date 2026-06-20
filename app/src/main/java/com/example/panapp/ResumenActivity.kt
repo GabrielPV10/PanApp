@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.panapp.database.ItemExtra
 import com.example.panapp.database.Producto
 import com.example.panapp.database.ResumenItem
+import com.example.panapp.ui.InicialChip
 import com.example.panapp.ui.UiState
 import com.example.panapp.ui.asUiState
 import com.example.panapp.ui.theme.PanAppTheme
@@ -73,7 +74,7 @@ fun ResumenScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("📋 Orden de Producción", fontWeight = FontWeight.Bold)
+                        Text("Orden de Producción", fontWeight = FontWeight.Bold)
                         Text("Total: ${orden?.totalPiezas ?: 0} piezas", fontSize = 13.sp)
                     }
                 },
@@ -115,7 +116,11 @@ fun ResumenScreen(
 
             is UiState.Error -> Box(contentModifier, contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⚠️", fontSize = 48.sp)
+                    Icon(
+                        Icons.Default.ErrorOutline, null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
                     Spacer(Modifier.height(8.dp))
                     Text("No se pudo cargar la orden")
                     Text(estado.message, color = MaterialTheme.colorScheme.outline)
@@ -124,7 +129,11 @@ fun ResumenScreen(
 
             is UiState.Empty -> Box(contentModifier, contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🍞", fontSize = 64.sp)
+                    Icon(
+                        Icons.Default.Inventory2, null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.outline
+                    )
                     Spacer(Modifier.height(16.dp))
                     Text("Aún no hay nada que producir")
                     Spacer(Modifier.height(4.dp))
@@ -198,7 +207,7 @@ private fun OrdenProduccionContenido(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text(
-                        "🎯 TOTAL A PRODUCIR",
+                        "TOTAL A PRODUCIR",
                         fontWeight = FontWeight.ExtraBold,
                         fontSize   = 16.sp
                     )
@@ -220,7 +229,7 @@ private fun OrdenProduccionContenido(
                                 color      = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                "💰 $${"%.0f".format(orden.totalDinero)}",
+                                "$${"%.0f".format(orden.totalDinero)}",
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize   = 15.sp,
                                 color      = MaterialTheme.colorScheme.onPrimaryContainer
@@ -491,8 +500,14 @@ fun DialogoInventarioExtra(
                                         .padding(horizontal = 16.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    InicialChip(
+                                        texto    = categoria,
+                                        size     = 28.dp,
+                                        fontSize = 13.sp
+                                    )
+                                    Spacer(Modifier.width(10.dp))
                                     Text(
-                                        "${prods.firstOrNull()?.emoji ?: "🍞"} $categoria",
+                                        categoria,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary
@@ -537,9 +552,15 @@ private fun FilaProductoExtra(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        InicialChip(
+            texto    = producto.variante.ifBlank { producto.categoria },
+            size     = 34.dp,
+            fontSize = 14.sp
+        )
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                "${producto.emoji} ${producto.variante.ifBlank { producto.categoria }}",
+                producto.variante.ifBlank { producto.categoria },
                 fontWeight = if (cantidad > 0) FontWeight.SemiBold else FontWeight.Normal,
                 color = if (cantidad > 0) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.outline

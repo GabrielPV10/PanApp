@@ -49,7 +49,7 @@ fun HistorialScreen(vm: PanViewModel, onVolver: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("📅 Historial", fontWeight = FontWeight.Bold) },
+                title = { Text("Historial", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onVolver) {
                         Icon(Icons.Default.ArrowBack, null)
@@ -109,7 +109,11 @@ private fun HistorialLista(
 
         is UiState.Error -> Box(base, contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("⚠️", fontSize = 48.sp)
+                Icon(
+                    Icons.Default.ErrorOutline, null,
+                    modifier = Modifier.size(48.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
                 Spacer(Modifier.height(8.dp))
                 Text("No se pudo cargar el historial")
                 Text(estado.message, color = MaterialTheme.colorScheme.outline)
@@ -118,7 +122,11 @@ private fun HistorialLista(
 
         is UiState.Empty -> Box(base, contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("📅", fontSize = 64.sp)
+                Icon(
+                    Icons.Default.CalendarMonth, null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
                 Spacer(Modifier.height(16.dp))
                 Text("Aún no hay semanas anteriores", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(8.dp))
