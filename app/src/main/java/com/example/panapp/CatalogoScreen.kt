@@ -43,7 +43,7 @@ fun CatalogoTab(
     showDialogAgregar: Boolean,
     onDismissDialogAgregar: () -> Unit
 ) {
-    val categoriasOrden    = productos.map { it.categoria }.distinct()
+    val categoriasOrden    = remember(productos) { productos.map { it.categoria }.distinct() }
     var productoAEditar    by remember { mutableStateOf<Producto?>(null) }
     val focusRequester     = remember { FocusRequester() }
 
@@ -60,8 +60,8 @@ fun CatalogoTab(
             it.categoria.contains(filtro, ignoreCase = true)
         }
     }
-    val porCategoria      = productosFiltrados.groupBy { it.categoria }
-    val categoriasFiltradas = productosFiltrados.map { it.categoria }.distinct()
+    val porCategoria        = remember(productosFiltrados) { productosFiltrados.groupBy { it.categoria } }
+    val categoriasFiltradas = remember(productosFiltrados) { productosFiltrados.map { it.categoria }.distinct() }
 
     // ── Diálogos ─────────────────────────────────────────────────────────────
     if (showDialogAgregar || productoAEditar != null) {
@@ -188,7 +188,7 @@ fun CatalogoTab(
                         val prods = porCategoria[categoria] ?: return@forEach
 
                         // ── Cabecera de categoría ──────────────────────────────
-                        item(key = "cat_$categoria") {
+                        item(key = "cat_$categoria", contentType = "header_categoria") {
                             Surface(
                                 color    = MaterialTheme.colorScheme.primaryContainer,
                                 modifier = Modifier.fillMaxWidth()
@@ -214,7 +214,7 @@ fun CatalogoTab(
                         }
 
                         // ── Productos ──────────────────────────────────────────
-                        items(prods, key = { it.id }) { prod ->
+                        items(prods, key = { it.id }, contentType = { "producto" }) { prod ->
                             TarjetaProducto(
                                 producto   = prod,
                                 busqueda   = filtro,
@@ -244,38 +244,38 @@ fun TarjetaProducto(
 ) {
     var confirmEliminar by remember { mutableStateOf(false) }
 
-    ListItem(
-        headlineContent = {
-            Text("${producto.emoji} ${producto.variante.ifBlank { producto.categoria }}")
-        },
-        supportingContent = {
+    Row(
+        modifier          = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${producto.emoji} ${producto.variante.ifBlank { producto.categoria }}",
+                fontSize = 15.sp
+            )
             Text(
                 "$${producto.precioUnitario.toInt()} por pieza",
-                color = MaterialTheme.colorScheme.outline
+                fontSize = 12.sp,
+                color    = MaterialTheme.colorScheme.outline
             )
-        },
-        trailingContent = {
-            Row {
-                IconButton(onClick = onEditar) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Editar",
-                        tint               = MaterialTheme.colorScheme.primary
-                    )
-                }
-                IconButton(onClick = { confirmEliminar = true }) {
-                    Icon(
-                        Icons.Default.Delete,
-                        contentDescription = "Eliminar",
-                        tint               = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        colors = ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    )
+        }
+        IconButton(onClick = onEditar) {
+            Icon(
+                Icons.Default.Edit,
+                contentDescription = "Editar",
+                tint               = MaterialTheme.colorScheme.primary
+            )
+        }
+        IconButton(onClick = { confirmEliminar = true }) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = "Eliminar",
+                tint               = MaterialTheme.colorScheme.error
+            )
+        }
+    }
 
     if (confirmEliminar) {
         AlertDialog(
