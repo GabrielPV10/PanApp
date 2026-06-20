@@ -9,6 +9,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,7 +20,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.panapp.database.ItemExtra
+import com.example.panapp.database.Producto
 import com.example.panapp.database.ResumenItem
 import com.example.panapp.ui.theme.PanAppTheme
 
@@ -44,6 +49,28 @@ class ResumenActivity : ComponentActivity() {
     }
 }
 
+/** Combina los pedidos de clientes con el inventario extra de la semana. */
+private fun consolidar(
+    pedidos: List<ResumenItem>,
+    extras: List<ItemExtra>
+): List<ResumenItem> {
+    val mapa = LinkedHashMap<Pair<String, String>, ResumenItem>()
+    pedidos.forEach { mapa[it.categoria to it.variante] = it }
+    extras.forEach { ex ->
+        val key  = ex.categoria to ex.variante
+        val prev = mapa[key]
+        mapa[key] = if (prev != null) {
+            prev.copy(
+                totalCantidad = prev.totalCantidad + ex.cantidad,
+                totalPrecio   = prev.totalPrecio + ex.cantidad * ex.precioUnitario
+            )
+        } else {
+            ResumenItem(ex.categoria, ex.variante, ex.cantidad, ex.cantidad * ex.precioUnitario)
+        }
+    }
+    return mapa.values.toList()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResumenScreen(
@@ -52,19 +79,32 @@ fun ResumenScreen(
     onVolver: () -> Unit
 ) {
     val context = LocalContext.current
-    val resumenItems by vm.getResumenProduccion(semanaId)
-        .collectAsStateWithLifecycle(emptyList())
 
-    val totalPiezas = resumenItems.sumOf { it.totalCantidad }
-    val totalDinero = resumenItems.sumOf { it.totalPrecio }
-    val porCategoria = resumenItems.groupBy { it.categoria }
+    val pedidos by vm.getResumenProduccion(semanaId)
+        .collectAsStateWithLifecycle(emptyList())
+    val extras by vm.getExtrasDeSemana(semanaId)
+        .collectAsStateWithLifecycle(emptyList())
+    val productos by vm.productos.collectAsStateWithLifecycle(emptyList())
+
+    val consolidado  = remember(pedidos, extras) { consolidar(pedidos, extras) }
+    val porCategoria = consolidado.groupBy { it.categoria }
+    val extrasPorVariante = remember(extras) {
+        extras.associate { (it.categoria to it.variante) to it.cantidad }
+    }
+
+    val piezasPedidos = pedidos.sumOf { it.totalCantidad }
+    val piezasExtra   = extras.sumOf { it.cantidad }
+    val totalPiezas   = piezasPedidos + piezasExtra
+    val totalDinero   = consolidado.sumOf { it.totalPrecio }
+
+    var showEditorExtra by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Column {
-                        Text("📋 Resumen de Producción", fontWeight = FontWeight.Bold)
+                        Text("📋 Orden de Producción", fontWeight = FontWeight.Bold)
                         Text("Total: $totalPiezas piezas", fontSize = 13.sp)
                     }
                 },
@@ -77,8 +117,11 @@ fun ResumenScreen(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
                 ),
                 actions = {
+                    IconButton(onClick = { showEditorExtra = true }) {
+                        Icon(Icons.Default.Inventory2, contentDescription = "Inventario extra")
+                    }
                     IconButton(onClick = {
-                        compartirResumen(context, resumenItems, totalPiezas, totalDinero)
+                        compartirResumen(context, consolidado, totalPiezas, totalDinero, piezasExtra)
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "Compartir")
                     }
@@ -87,7 +130,7 @@ fun ResumenScreen(
         }
     ) { innerPadding ->
 
-        if (resumenItems.isEmpty()) {
+        if (consolidado.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -97,7 +140,22 @@ fun ResumenScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("🍞", fontSize = 64.sp)
                     Spacer(Modifier.height(16.dp))
-                    Text("Aún no hay pedidos esta semana")
+                    Text("Aún no hay nada que producir")
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Agrega pedidos o inventario extra",
+                        color = MaterialTheme.colorScheme.outline,
+                        fontSize = 13.sp
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Button(
+                        onClick = { showEditorExtra = true },
+                        shape   = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Agregar pan extra")
+                    }
                 }
             }
         } else {
@@ -108,7 +166,7 @@ fun ResumenScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Total general destacado
+                // ── Total general con desglose ────────────────────────────
                 item {
                     Card(
                         colors = CardDefaults.cardColors(
@@ -116,37 +174,111 @@ fun ResumenScreen(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(20.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
                             Text(
                                 "🎯 TOTAL A PRODUCIR",
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 16.sp
+                                fontSize   = 16.sp
                             )
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    "$totalPiezas piezas",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 24.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    "💰 $${"%.0f".format(totalDinero)}",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
+                            Spacer(Modifier.height(10.dp))
+                            DesgloseLinea("Pedidos de clientes", "$piezasPedidos pzas")
+                            DesgloseLinea("Inventario extra", "$piezasExtra pzas")
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Total", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        "$totalPiezas piezas",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize   = 24.sp,
+                                        color      = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        "💰 $${"%.0f".format(totalDinero)}",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize   = 15.sp,
+                                        color      = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
-                // Por categoría
+                // ── Inventario extra ──────────────────────────────────────
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors   = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Inventory2, null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Inventario extra",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                                TextButton(onClick = { showEditorExtra = true }) {
+                                    Icon(
+                                        if (extras.isEmpty()) Icons.Default.Add else Icons.Default.Edit,
+                                        null, modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(if (extras.isEmpty()) "Agregar" else "Editar")
+                                }
+                            }
+                            if (extras.isEmpty()) {
+                                Text(
+                                    "Sin pan extra para venta en frío",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            } else {
+                                Spacer(Modifier.height(4.dp))
+                                extras.forEach { ex ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            ex.variante.ifBlank { ex.categoria },
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            "×${ex.cantidad}",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Por categoría (consolidado) ───────────────────────────
                 porCategoria.forEach { (categoria, items) ->
                     val totalCat = items.sumOf { it.totalCantidad }
 
@@ -159,7 +291,6 @@ fun ResumenScreen(
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                // Encabezado de categoría
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -171,17 +302,15 @@ fun ResumenScreen(
                                         fontSize = 17.sp,
                                         color = MaterialTheme.colorScheme.primary
                                     )
-                                    Badge(
-                                        containerColor = MaterialTheme.colorScheme.primary
-                                    ) {
+                                    Badge(containerColor = MaterialTheme.colorScheme.primary) {
                                         Text("$totalCat total", fontSize = 12.sp)
                                     }
                                 }
 
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-                                // Items de la categoría
                                 items.sortedByDescending { it.totalCantidad }.forEach { item ->
+                                    val extraDe = extrasPorVariante[item.categoria to item.variante] ?: 0
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -189,12 +318,20 @@ fun ResumenScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            item.variante.ifBlank { item.categoria },
-                                            fontSize = 15.sp
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                item.variante.ifBlank { item.categoria },
+                                                fontSize = 15.sp
+                                            )
+                                            if (extraDe > 0) {
+                                                Text(
+                                                    "incluye $extraDe extra",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                        }
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            // Barra visual de cantidad
                                             val maxCant = items.maxOf { it.totalCantidad }
                                             val ratio = item.totalCantidad.toFloat() / maxCant
                                             Box(
@@ -221,10 +358,11 @@ fun ResumenScreen(
                     }
                 }
 
-                // Botón compartir al final
                 item {
                     Button(
-                        onClick = { compartirResumen(context, resumenItems, totalPiezas, totalDinero) },
+                        onClick = {
+                            compartirResumen(context, consolidado, totalPiezas, totalDinero, piezasExtra)
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Default.Share, null)
@@ -235,16 +373,221 @@ fun ResumenScreen(
             }
         }
     }
+
+    // ─── EDITOR DE INVENTARIO EXTRA ───────────────────────────────────────────
+    if (showEditorExtra) {
+        DialogoInventarioExtra(
+            productos      = productos,
+            extrasActuales = extras,
+            onGuardar      = { cantidades ->
+                vm.guardarExtras(semanaId, cantidades)
+                showEditorExtra = false
+            },
+            onDismiss      = { showEditorExtra = false }
+        )
+    }
+}
+
+@Composable
+private fun DesgloseLinea(etiqueta: String, valor: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(etiqueta, fontSize = 14.sp, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        Text(valor, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+// ─── DIÁLOGO EDITOR DE INVENTARIO EXTRA ───────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DialogoInventarioExtra(
+    productos: List<Producto>,
+    extrasActuales: List<ItemExtra>,
+    onGuardar: (Map<Producto, Int>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val cantidades = remember {
+        mutableStateMapOf<String, Int>().apply {
+            extrasActuales.forEach { put("${it.categoria}||${it.variante}", it.cantidad) }
+        }
+    }
+
+    val totalPiezas = cantidades.values.sum()
+    val porCategoria = productos.groupBy { it.categoria }
+
+    fun guardar() {
+        val mapa = mutableMapOf<Producto, Int>()
+        cantidades.forEach { (key, cant) ->
+            val parts = key.split("||")
+            val prod = productos.find {
+                it.categoria == parts[0] && it.variante == parts.getOrElse(1) { "" }
+            }
+            if (prod != null && cant > 0) mapa[prod] = cant
+        }
+        onGuardar(mapa)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Column {
+                                Text("Inventario extra", fontWeight = FontWeight.Bold)
+                                Text("$totalPiezas piezas para venta en frío", fontSize = 13.sp)
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancelar")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        actions = {
+                            TextButton(onClick = { guardar() }) {
+                                Icon(Icons.Default.Save, null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Guardar")
+                            }
+                        }
+                    )
+                }
+            ) { innerPadding ->
+                if (productos.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentAlignment = Alignment.Center
+                    ) { CircularProgressIndicator() }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentPadding = PaddingValues(bottom = 32.dp)
+                    ) {
+                        porCategoria.forEach { (categoria, prods) ->
+                            item(key = "h_$categoria") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "${prods.firstOrNull()?.emoji ?: "🍞"} $categoria",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                            }
+                            prods.forEach { producto ->
+                                item(key = producto.id) {
+                                    val key = "${producto.categoria}||${producto.variante}"
+                                    val cantidad = cantidades[key] ?: 0
+                                    FilaProductoExtra(
+                                        producto = producto,
+                                        cantidad = cantidad,
+                                        onIncrement = { cantidades[key] = cantidad + 1 },
+                                        onDecrement = {
+                                            if (cantidad > 1) cantidades[key] = cantidad - 1
+                                            else cantidades.remove(key)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilaProductoExtra(
+    producto: Producto,
+    cantidad: Int,
+    onIncrement: () -> Unit,
+    onDecrement: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "${producto.emoji} ${producto.variante.ifBlank { producto.categoria }}",
+                fontWeight = if (cantidad > 0) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (cantidad > 0) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.outline
+            )
+            Text(
+                "$${producto.precioUnitario.toInt()} c/u",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilledIconButton(
+                onClick = onDecrement,
+                enabled = cantidad > 0,
+                modifier = Modifier.size(32.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Icon(Icons.Default.Remove, null, modifier = Modifier.size(16.dp))
+            }
+            Text(
+                "$cantidad",
+                modifier = Modifier
+                    .width(40.dp)
+                    .wrapContentWidth(Alignment.CenterHorizontally),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = if (cantidad > 0) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline
+            )
+            FilledIconButton(
+                onClick = onIncrement,
+                modifier = Modifier.size(32.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+            }
+        }
+    }
 }
 
 fun compartirResumen(
     context: android.content.Context,
     items: List<ResumenItem>,
     totalPiezas: Int,
-    totalDinero: Double
+    totalDinero: Double,
+    piezasExtra: Int = 0
 ) {
     val sb = StringBuilder()
-    sb.appendLine("🥖 *PEDIDO DE PRODUCCIÓN* 🥖")
+    sb.appendLine("🥖 *ORDEN DE PRODUCCIÓN* 🥖")
     sb.appendLine("─────────────────────────")
 
     items.groupBy { it.categoria }.forEach { (cat, catItems) ->
@@ -256,19 +599,20 @@ fun compartirResumen(
     }
 
     sb.appendLine("─────────────────────────")
+    if (piezasExtra > 0) {
+        sb.appendLine("(incluye $piezasExtra extra para venta en frío)")
+    }
     sb.appendLine("*TOTAL: $totalPiezas piezas · \$${"%.0f".format(totalDinero)}*")
 
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
         putExtra(Intent.EXTRA_TEXT, sb.toString())
-        // Intenta abrir directo en WhatsApp; si no está, abre el selector
         setPackage("com.whatsapp")
     }
 
     try {
         context.startActivity(intent)
     } catch (e: Exception) {
-        // WhatsApp no instalado, abre selector general
         context.startActivity(Intent.createChooser(
             intent.also { it.setPackage(null) },
             "Compartir resumen"

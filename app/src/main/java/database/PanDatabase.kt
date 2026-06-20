@@ -11,8 +11,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [Semana::class, Cliente::class, ItemPedido::class, Producto::class],
-    version = 4,
+    entities = [Semana::class, Cliente::class, ItemPedido::class, Producto::class, ItemExtra::class],
+    version = 5,
     exportSchema = false
 )
 abstract class PanDatabase : RoomDatabase() {
@@ -20,6 +20,7 @@ abstract class PanDatabase : RoomDatabase() {
     abstract fun clienteDao(): ClienteDao
     abstract fun itemPedidoDao(): ItemPedidoDao
     abstract fun productoDao(): ProductoDao
+    abstract fun itemExtraDao(): ItemExtraDao
 
     companion object {
         @Volatile private var INSTANCE: PanDatabase? = null
@@ -56,6 +57,22 @@ abstract class PanDatabase : RoomDatabase() {
             }
         }
 
+        /** Migración 4 → 5: crea la tabla de inventario extra por semana */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `items_extra` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `semanaId` INTEGER NOT NULL,
+                        `categoria` TEXT NOT NULL,
+                        `variante` TEXT NOT NULL,
+                        `cantidad` INTEGER NOT NULL,
+                        `precioUnitario` REAL NOT NULL
+                    )"""
+                )
+            }
+        }
+
         fun getInstance(context: Context): PanDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -63,7 +80,7 @@ abstract class PanDatabase : RoomDatabase() {
                     PanDatabase::class.java,
                     "pan_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { db ->
                         INSTANCE = db

@@ -84,6 +84,18 @@ interface ItemPedidoDao {
 }
 
 @Dao
+interface ItemExtraDao {
+    @Query("SELECT * FROM items_extra WHERE semanaId = :semanaId ORDER BY categoria, variante")
+    fun getExtrasDeSemana(semanaId: Long): Flow<List<ItemExtra>>
+
+    @Insert
+    suspend fun insertAll(items: List<ItemExtra>)
+
+    @Query("DELETE FROM items_extra WHERE semanaId = :semanaId")
+    suspend fun deleteAllDeSemana(semanaId: Long)
+}
+
+@Dao
 interface ProductoDao {
     @Query("SELECT * FROM productos_catalogo ORDER BY orden ASC, categoria ASC, variante ASC")
     fun getAll(): Flow<List<Producto>>

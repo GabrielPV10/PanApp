@@ -32,6 +32,20 @@ data class ItemPedido(
     val precioUnitario: Double
 )
 
+/**
+ * Inventario extra de una semana: pan para venta en frío/espontánea.
+ * No pertenece a ningún cliente; se suma a la orden de producción.
+ */
+@Entity(tableName = "items_extra")
+data class ItemExtra(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val semanaId: Long,
+    val categoria: String,
+    val variante: String,
+    val cantidad: Int,
+    val precioUnitario: Double
+)
+
 /** Producto del catálogo — editable por el usuario */
 @Entity(tableName = "productos_catalogo")
 data class Producto(

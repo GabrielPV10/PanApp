@@ -10,11 +10,12 @@ import java.time.format.DateTimeFormatter
 
 class PanViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val db          = PanDatabase.getInstance(application)
-    private val semanaDao   = db.semanaDao()
-    private val clienteDao  = db.clienteDao()
-    private val itemDao     = db.itemPedidoDao()
-    private val productoDao = db.productoDao()
+    private val db           = PanDatabase.getInstance(application)
+    private val semanaDao    = db.semanaDao()
+    private val clienteDao   = db.clienteDao()
+    private val itemDao      = db.itemPedidoDao()
+    private val productoDao  = db.productoDao()
+    private val itemExtraDao = db.itemExtraDao()
 
     // ─── SEMANA ACTIVA ───────────────────────────────────────────────────────
 
@@ -116,6 +117,29 @@ class PanViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getResumenProduccion(semanaId: Long): Flow<List<ResumenItem>> =
         itemDao.getResumenProduccion(semanaId)
+
+    // ─── INVENTARIO EXTRA (venta en frío) ────────────────────────────────────
+
+    fun getExtrasDeSemana(semanaId: Long): Flow<List<ItemExtra>> =
+        itemExtraDao.getExtrasDeSemana(semanaId)
+
+    /** Guarda el inventario extra de la semana (reemplaza todo) */
+    fun guardarExtras(semanaId: Long, cantidades: Map<Producto, Int>) =
+        viewModelScope.launch {
+            itemExtraDao.deleteAllDeSemana(semanaId)
+            val items = cantidades
+                .filter { it.value > 0 }
+                .map { (prod, cant) ->
+                    ItemExtra(
+                        semanaId       = semanaId,
+                        categoria      = prod.categoria,
+                        variante       = prod.variante,
+                        cantidad       = cant,
+                        precioUnitario = prod.precioUnitario
+                    )
+                }
+            itemExtraDao.insertAll(items)
+        }
 
     // ─── HISTORIAL ───────────────────────────────────────────────────────────
 
