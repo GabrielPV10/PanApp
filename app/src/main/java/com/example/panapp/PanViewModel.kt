@@ -106,15 +106,29 @@ class PanViewModel(private val repo: PanRepository) : ViewModel() {
             repo.insertItems(items)
         }
 
-    // ─── RESUMEN DE PRODUCCIÓN ───────────────────────────────────────────────
+    // ─── ORDEN DE PRODUCCIÓN (pedidos + inventario extra) ────────────────────
 
-    fun getResumenProduccion(semanaId: Long): Flow<List<ResumenItem>> =
+    /**
+     * Combina los pedidos de clientes con el inventario extra de la semana en
+     * una sola orden de producción consolidada, reactiva a ambas fuentes.
+     */
+    fun getOrdenProduccion(semanaId: Long): Flow<OrdenProduccion> =
         repo.getResumenProduccion(semanaId)
+            .combine(repo.getExtrasDeSemana(semanaId)) { pedidos, extras ->
+                val consolidado   = consolidar(pedidos, extras)
+                val piezasPedidos = pedidos.sumOf { it.totalCantidad }
+                val piezasExtra   = extras.sumOf { it.cantidad }
+                OrdenProduccion(
+                    consolidado   = consolidado,
+                    extras        = extras,
+                    piezasPedidos = piezasPedidos,
+                    piezasExtra   = piezasExtra,
+                    totalPiezas   = piezasPedidos + piezasExtra,
+                    totalDinero   = consolidado.sumOf { it.totalPrecio }
+                )
+            }
 
     // ─── INVENTARIO EXTRA (venta en frío) ────────────────────────────────────
-
-    fun getExtrasDeSemana(semanaId: Long): Flow<List<ItemExtra>> =
-        repo.getExtrasDeSemana(semanaId)
 
     /** Guarda el inventario extra de la semana (reemplaza todo) */
     fun guardarExtras(semanaId: Long, cantidades: Map<Producto, Int>) =
@@ -181,4 +195,38 @@ class PanViewModelFactory(private val application: Application) :
         @Suppress("UNCHECKED_CAST")
         return PanViewModel(repo) as T
     }
+}
+
+// ─── ORDEN DE PRODUCCIÓN ──────────────────────────────────────────────────────
+
+/** Orden de producción consolidada: pedidos de clientes + inventario extra. */
+data class OrdenProduccion(
+    val consolidado: List<ResumenItem>,
+    val extras: List<ItemExtra>,
+    val piezasPedidos: Int,
+    val piezasExtra: Int,
+    val totalPiezas: Int,
+    val totalDinero: Double
+)
+
+/** Combina los pedidos de clientes con el inventario extra de la semana. */
+private fun consolidar(
+    pedidos: List<ResumenItem>,
+    extras: List<ItemExtra>
+): List<ResumenItem> {
+    val mapa = LinkedHashMap<Pair<String, String>, ResumenItem>()
+    pedidos.forEach { mapa[it.categoria to it.variante] = it }
+    extras.forEach { ex ->
+        val key  = ex.categoria to ex.variante
+        val prev = mapa[key]
+        mapa[key] = if (prev != null) {
+            prev.copy(
+                totalCantidad = prev.totalCantidad + ex.cantidad,
+                totalPrecio   = prev.totalPrecio + ex.cantidad * ex.precioUnitario
+            )
+        } else {
+            ResumenItem(ex.categoria, ex.variante, ex.cantidad, ex.cantidad * ex.precioUnitario)
+        }
+    }
+    return mapa.values.toList()
 }

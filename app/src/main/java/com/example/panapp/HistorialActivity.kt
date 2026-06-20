@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.panapp.database.SemanaConClientes
+import com.example.panapp.ui.UiState
+import com.example.panapp.ui.asUiState
 import com.example.panapp.ui.theme.PanAppTheme
 
 class HistorialActivity : ComponentActivity() {
@@ -40,7 +42,8 @@ class HistorialActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistorialScreen(vm: PanViewModel, onVolver: () -> Unit) {
-    val historial by vm.historial.collectAsStateWithLifecycle(emptyList())
+    val historialState by remember { vm.historial.asUiState() }
+        .collectAsStateWithLifecycle(UiState.Loading)
     val context = LocalContext.current
 
     Scaffold(
@@ -58,42 +61,17 @@ fun HistorialScreen(vm: PanViewModel, onVolver: () -> Unit) {
             )
         }
     ) { innerPadding ->
-
-        if (historial.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("📅", fontSize = 64.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Text("Aún no hay semanas anteriores")
-                }
+        HistorialLista(
+            modifier      = Modifier.padding(innerPadding),
+            historialState = historialState,
+            onVerResumen  = { semanaId ->
+                context.startActivity(
+                    Intent(context, ResumenActivity::class.java).apply {
+                        putExtra("SEMANA_ID", semanaId)
+                    }
+                )
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(historial) { semanaConClientes ->
-                    TarjetaHistorial(
-                        semanaConClientes = semanaConClientes,
-                        onVerResumen = { semanaId ->
-                            context.startActivity(
-                                Intent(context, ResumenActivity::class.java).apply {
-                                    putExtra("SEMANA_ID", semanaId)
-                                }
-                            )
-                        }
-                    )
-                }
-            }
-        }
+        )
     }
 }
 
@@ -105,13 +83,40 @@ fun HistorialContent(
     vm: PanViewModel,
     onVerResumen: (Long) -> Unit
 ) {
-    val historial by vm.historial.collectAsStateWithLifecycle(emptyList())
+    val historialState by remember { vm.historial.asUiState() }
+        .collectAsStateWithLifecycle(UiState.Loading)
 
-    if (historial.isEmpty()) {
-        Box(
-            modifier         = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
+    HistorialLista(
+        modifier       = modifier,
+        historialState = historialState,
+        onVerResumen   = onVerResumen
+    )
+}
+
+// ─── LISTA DE HISTORIAL CON ESTADOS ──────────────────────────────────────────
+
+@Composable
+private fun HistorialLista(
+    modifier: Modifier = Modifier,
+    historialState: UiState<List<SemanaConClientes>>,
+    onVerResumen: (Long) -> Unit
+) {
+    val base = modifier.fillMaxSize()
+    when (val estado = historialState) {
+        is UiState.Loading -> Box(base, contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+
+        is UiState.Error -> Box(base, contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("⚠️", fontSize = 48.sp)
+                Spacer(Modifier.height(8.dp))
+                Text("No se pudo cargar el historial")
+                Text(estado.message, color = MaterialTheme.colorScheme.outline)
+            }
+        }
+
+        is UiState.Empty -> Box(base, contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("📅", fontSize = 64.sp)
                 Spacer(Modifier.height(16.dp))
@@ -123,13 +128,13 @@ fun HistorialContent(
                 )
             }
         }
-    } else {
-        LazyColumn(
-            modifier       = modifier.fillMaxSize(),
+
+        is UiState.Success -> LazyColumn(
+            modifier       = base,
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(historial) { semanaConClientes ->
+            items(estado.data) { semanaConClientes ->
                 TarjetaHistorial(
                     semanaConClientes = semanaConClientes,
                     onVerResumen      = onVerResumen

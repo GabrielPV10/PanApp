@@ -19,8 +19,15 @@ sealed interface UiState<out T> {
  * datos en caso contrario; cualquier excepción se mapea a [UiState.Error].
  */
 fun <T> Flow<List<T>>.asUiState(): Flow<UiState<List<T>>> =
-    map { lista ->
-        if (lista.isEmpty()) UiState.Empty else UiState.Success(lista)
+    asUiState { it.isEmpty() }
+
+/**
+ * Variante para cualquier tipo: usa [isEmpty] para decidir cuándo emitir
+ * [UiState.Empty] en lugar de [UiState.Success].
+ */
+fun <T> Flow<T>.asUiState(isEmpty: (T) -> Boolean): Flow<UiState<T>> =
+    map { valor ->
+        if (isEmpty(valor)) UiState.Empty else UiState.Success(valor)
     }
         .onStart { emit(UiState.Loading) }
         .catch { emit(UiState.Error(it.message ?: "Error desconocido")) }
