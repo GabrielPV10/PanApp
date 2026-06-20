@@ -61,6 +61,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onAbrirReportes = {
                         startActivity(Intent(this, ReportesActivity::class.java))
+                    },
+                    onAbrirRespaldo = {
+                        startActivity(Intent(this, RespaldoActivity::class.java))
                     }
                 )
             }
@@ -76,7 +79,8 @@ fun MainAppShell(
     vm: PanViewModel,
     onAbrirPedido: (Long, String) -> Unit,
     onAbrirResumen: (Long) -> Unit,
-    onAbrirReportes: () -> Unit
+    onAbrirReportes: () -> Unit,
+    onAbrirRespaldo: () -> Unit
 ) {
     val semanaId     by vm.semanaActualId.collectAsStateWithLifecycle()
     val semanaActual by vm.semanaActual.collectAsStateWithLifecycle(null)
@@ -88,6 +92,7 @@ fun MainAppShell(
     val productos by vm.productos.collectAsStateWithLifecycle(emptyList())
 
     var tabSeleccionado          by remember { mutableStateOf(0) }
+    var showMenuPrincipal        by remember { mutableStateOf(false) }
     var showDialogNuevaSemana    by remember { mutableStateOf(false) }
     var showDialogAgregarCliente by remember { mutableStateOf(false) }
     var showDialogAgregarProduct by remember { mutableStateOf(false) }
@@ -152,6 +157,24 @@ fun MainAppShell(
                                 else Icons.Default.Search,
                                 contentDescription = if (showFiltroCatalogo) "Cerrar filtro"
                                                      else "Filtrar catálogo"
+                            )
+                        }
+                    }
+                    Box {
+                        IconButton(onClick = { showMenuPrincipal = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Más opciones")
+                        }
+                        DropdownMenu(
+                            expanded         = showMenuPrincipal,
+                            onDismissRequest = { showMenuPrincipal = false }
+                        ) {
+                            DropdownMenuItem(
+                                text        = { Text("Respaldo de datos") },
+                                leadingIcon = { Icon(Icons.Default.CloudUpload, null) },
+                                onClick     = {
+                                    showMenuPrincipal = false
+                                    onAbrirRespaldo()
+                                }
                             )
                         }
                     }

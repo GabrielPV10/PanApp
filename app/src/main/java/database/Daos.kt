@@ -22,6 +22,16 @@ interface SemanaDao {
 
     @Delete
     suspend fun delete(semana: Semana)
+
+    // ── Respaldo ──
+    @Query("SELECT * FROM semanas")
+    suspend fun getAllOnce(): List<Semana>
+
+    @Insert
+    suspend fun insertAll(semanas: List<Semana>)
+
+    @Query("DELETE FROM semanas")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -53,6 +63,16 @@ interface ClienteDao {
 
     @Query("SELECT * FROM clientes WHERE id = :id")
     suspend fun getById(id: Long): Cliente?
+
+    // ── Respaldo ──
+    @Query("SELECT * FROM clientes")
+    suspend fun getAllOnce(): List<Cliente>
+
+    @Insert
+    suspend fun insertAll(clientes: List<Cliente>)
+
+    @Query("DELETE FROM clientes")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -81,6 +101,13 @@ interface ItemPedidoDao {
         ORDER BY ip.categoria, ip.variante
     """)
     fun getResumenProduccion(semanaId: Long): Flow<List<ResumenItem>>
+
+    // ── Respaldo ──
+    @Query("SELECT * FROM items_pedido")
+    suspend fun getAllOnce(): List<ItemPedido>
+
+    @Query("DELETE FROM items_pedido")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -93,6 +120,13 @@ interface ItemExtraDao {
 
     @Query("DELETE FROM items_extra WHERE semanaId = :semanaId")
     suspend fun deleteAllDeSemana(semanaId: Long)
+
+    // ── Respaldo ──
+    @Query("SELECT * FROM items_extra")
+    suspend fun getAllOnce(): List<ItemExtra>
+
+    @Query("DELETE FROM items_extra")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -114,6 +148,13 @@ interface ProductoDao {
 
     @Query("SELECT COUNT(*) FROM productos_catalogo")
     suspend fun count(): Int
+
+    // ── Respaldo ──
+    @Insert
+    suspend fun insertAll(productos: List<Producto>)
+
+    @Query("DELETE FROM productos_catalogo")
+    suspend fun deleteAll()
 }
 
 // Resultado del resumen de producción (incluye precio histórico almacenado)

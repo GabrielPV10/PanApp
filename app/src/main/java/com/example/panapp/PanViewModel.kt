@@ -2,10 +2,13 @@ package com.example.panapp
 
 import android.app.Application
 import androidx.lifecycle.*
+import com.example.panapp.data.BackupSerializer
 import com.example.panapp.data.PanRepository
 import com.example.panapp.database.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -185,6 +188,18 @@ class PanViewModel(private val repo: PanRepository) : ViewModel() {
 
     fun eliminarProducto(producto: Producto) = viewModelScope.launch {
         repo.deleteProducto(producto)
+    }
+
+    // ─── RESPALDO ────────────────────────────────────────────────────────────
+
+    /** Genera el JSON del respaldo completo (serialización fuera del hilo UI). */
+    suspend fun construirRespaldoJson(): String = withContext(Dispatchers.Default) {
+        BackupSerializer.serializar(repo.exportar())
+    }
+
+    /** Restaura la base desde el JSON de un respaldo. Lanza excepción si es inválido. */
+    suspend fun restaurarRespaldo(json: String) = withContext(Dispatchers.Default) {
+        repo.importar(BackupSerializer.parsear(json))
     }
 }
 

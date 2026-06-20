@@ -44,6 +44,11 @@
             android:name=".ReportesActivity"
             android:exported="false" />
 
+        <!-- ── Respaldo / restauración de datos ───────────────── -->
+        <activity
+            android:name=".RespaldoActivity"
+            android:exported="false" />
+
     </application>
 
 </manifest>

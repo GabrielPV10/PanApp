@@ -1,5 +1,6 @@
 package com.example.panapp.data
 
+import androidx.room.withTransaction
 import com.example.panapp.database.*
 import kotlinx.coroutines.flow.Flow
 
@@ -8,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  * el ViewModel no dependa directamente de la base de datos (más testeable y
  * preparado para sumar mañana una fuente remota).
  */
-class PanRepository(db: PanDatabase) {
+class PanRepository(private val db: PanDatabase) {
 
     private val semanaDao    = db.semanaDao()
     private val clienteDao   = db.clienteDao()
@@ -61,4 +62,33 @@ class PanRepository(db: PanDatabase) {
     suspend fun insertProducto(producto: Producto): Long = productoDao.insert(producto)
     suspend fun updateProducto(producto: Producto)     = productoDao.update(producto)
     suspend fun deleteProducto(producto: Producto)     = productoDao.delete(producto)
+
+    // ─── Respaldo / restauración ────────────────────────────────────────────────
+
+    /** Instantánea completa de la base para exportar. */
+    suspend fun exportar(): BackupData = BackupData(
+        semanas   = semanaDao.getAllOnce(),
+        clientes  = clienteDao.getAllOnce(),
+        items     = itemDao.getAllOnce(),
+        extras    = itemExtraDao.getAllOnce(),
+        productos = productoDao.getAllOnce()
+    )
+
+    /**
+     * Reemplaza toda la base con el contenido del respaldo. Todo dentro de una
+     * transacción: si algo falla, no queda la base a medias.
+     */
+    suspend fun importar(data: BackupData) = db.withTransaction {
+        itemDao.deleteAll()
+        itemExtraDao.deleteAll()
+        clienteDao.deleteAll()
+        semanaDao.deleteAll()
+        productoDao.deleteAll()
+
+        semanaDao.insertAll(data.semanas)
+        clienteDao.insertAll(data.clientes)
+        itemDao.insertAll(data.items)
+        itemExtraDao.insertAll(data.extras)
+        productoDao.insertAll(data.productos)
+    }
 }
