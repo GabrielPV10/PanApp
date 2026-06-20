@@ -486,7 +486,13 @@ fun PedidosTab(
                         onTogglePagado     = { onTogglePagado(cc.cliente) },
                         onEliminar         = { onEliminarCliente(cc) },
                         onRenombrar        = { n -> onRenombrarCliente(cc.cliente, n) },
-                        onActualizarNotas  = { n -> onActualizarNotas(cc.cliente, n) }
+                        onActualizarNotas  = { n -> onActualizarNotas(cc.cliente, n) },
+                        esNombreDuplicado  = { nuevo ->
+                            clientes.any {
+                                it.cliente.id != cc.cliente.id &&
+                                it.cliente.nombre.equals(nuevo, ignoreCase = true)
+                            }
+                        }
                     )
                 }
                 item { Spacer(Modifier.height(80.dp)) }
@@ -593,7 +599,8 @@ fun TarjetaCliente(
     onTogglePagado:    () -> Unit,
     onEliminar:        () -> Unit,
     onRenombrar:       (String) -> Unit,
-    onActualizarNotas: (String) -> Unit
+    onActualizarNotas: (String) -> Unit,
+    esNombreDuplicado: (String) -> Boolean = { false }
 ) {
     val cliente    = clienteConItems.cliente
     val items      = clienteConItems.items
@@ -821,27 +828,33 @@ fun TarjetaCliente(
     }
 
     if (showRenombrar) {
+        val nombreDuplicado = nuevoNombreEdit.isNotBlank() &&
+            esNombreDuplicado(nuevoNombreEdit.trim())
         AlertDialog(
             onDismissRequest = { showRenombrar = false },
             title   = { Text("Renombrar cliente") },
             text    = {
                 OutlinedTextField(
-                    value         = nuevoNombreEdit,
-                    onValueChange = { nuevoNombreEdit = it },
-                    label         = { Text("Nuevo nombre") },
-                    singleLine    = true,
-                    modifier      = Modifier.fillMaxWidth()
+                    value          = nuevoNombreEdit,
+                    onValueChange  = { nuevoNombreEdit = it },
+                    label          = { Text("Nuevo nombre") },
+                    isError        = nombreDuplicado,
+                    supportingText = if (nombreDuplicado) {
+                        { Text("Ya existe otro cliente con este nombre") }
+                    } else null,
+                    singleLine     = true,
+                    modifier       = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
                 Button(
                     onClick  = {
-                        if (nuevoNombreEdit.isNotBlank()) {
+                        if (nuevoNombreEdit.isNotBlank() && !nombreDuplicado) {
                             onRenombrar(nuevoNombreEdit.trim())
                             showRenombrar = false
                         }
                     },
-                    enabled  = nuevoNombreEdit.isNotBlank()
+                    enabled  = nuevoNombreEdit.isNotBlank() && !nombreDuplicado
                 ) { Text("Guardar") }
             },
             dismissButton = {
