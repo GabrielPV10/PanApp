@@ -151,7 +151,12 @@ fun ReportesScreen(onVolver: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        Brush.linearGradient(listOf(Color(0xFF52E808), Color(0xFF1E7A00))),
+                        Brush.linearGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        ),
                         RoundedCornerShape(16.dp)
                     )
                     .padding(20.dp)
@@ -210,7 +215,7 @@ fun ReportesScreen(onVolver: () -> Unit) {
                         ) {
                             Icon(
                                 icon, null,
-                                tint     = Color(0xFF3CB504),
+                                tint     = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(Modifier.width(10.dp))
@@ -352,7 +357,9 @@ fun ReportesScreen(onVolver: () -> Unit) {
                     .fillMaxWidth()
                     .height(54.dp),
                 shape  = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3CB504))
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
             ) {
                 if (enviando) {
                     CircularProgressIndicator(
