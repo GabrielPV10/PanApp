@@ -29,6 +29,8 @@ import com.example.panapp.database.Cliente
 import com.example.panapp.database.ClienteConItems
 import com.example.panapp.database.Producto
 import com.example.panapp.database.Semana
+import com.example.panapp.ui.UiState
+import com.example.panapp.ui.asUiState
 import com.example.panapp.ui.theme.PanAppTheme
 import kotlinx.coroutines.flow.flowOf
 
@@ -78,9 +80,11 @@ fun MainAppShell(
 ) {
     val semanaId     by vm.semanaActualId.collectAsStateWithLifecycle()
     val semanaActual by vm.semanaActual.collectAsStateWithLifecycle(null)
-    val clientes     by remember(semanaId) {
-        semanaId?.let { vm.getClientesDeSemana(it) } ?: flowOf(emptyList())
-    }.collectAsStateWithLifecycle(emptyList())
+    val clientesState by remember(semanaId) {
+        semanaId?.let { vm.getClientesDeSemana(it).asUiState() } ?: flowOf(UiState.Empty)
+    }.collectAsStateWithLifecycle(UiState.Loading)
+    // Lista plana para los diálogos (copiar semana, validar duplicados)
+    val clientes = (clientesState as? UiState.Success)?.data ?: emptyList()
     val productos by vm.productos.collectAsStateWithLifecycle(emptyList())
 
     var tabSeleccionado          by remember { mutableStateOf(0) }
@@ -206,7 +210,7 @@ fun MainAppShell(
             0 -> PedidosTab(
                 modifier            = Modifier.padding(innerPadding),
                 semanaId            = semanaId,
-                clientes            = clientes,
+                clientesState       = clientesState,
                 productos           = productos,
                 onToggleEntregado   = { vm.toggleEntregado(it) },
                 onTogglePagado      = { vm.togglePagado(it) },
@@ -363,7 +367,7 @@ fun DialogoAgregarCliente(
 fun PedidosTab(
     modifier: Modifier = Modifier,
     semanaId: Long?,
-    clientes: List<ClienteConItems>,
+    clientesState: UiState<List<ClienteConItems>>,
     productos: List<Producto>,
     onToggleEntregado: (Cliente) -> Unit,
     onTogglePagado: (Cliente) -> Unit,
@@ -403,6 +407,27 @@ fun PedidosTab(
         }
         return
     }
+
+    // Cargando la primera emisión de Room
+    if (clientesState is UiState.Loading) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    if (clientesState is UiState.Error) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("⚠️", fontSize = 48.sp)
+                Spacer(Modifier.height(8.dp))
+                Text("No se pudieron cargar los clientes")
+                Text(clientesState.message, color = MaterialTheme.colorScheme.outline)
+            }
+        }
+        return
+    }
+
+    val clientes = (clientesState as? UiState.Success)?.data ?: emptyList()
 
     Column(modifier = modifier.fillMaxSize()) {
         // ── Tarjeta resumen rápido ────────────────────────────────────
