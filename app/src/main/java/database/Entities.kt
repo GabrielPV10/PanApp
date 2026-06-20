@@ -12,7 +12,10 @@ data class Semana(
     val etiqueta: String
 )
 
-@Entity(tableName = "clientes")
+@Entity(
+    tableName = "clientes",
+    indices = [Index("semanaId")]
+)
 data class Cliente(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val semanaId: Long,
@@ -22,7 +25,10 @@ data class Cliente(
     val notas: String = ""
 )
 
-@Entity(tableName = "items_pedido")
+@Entity(
+    tableName = "items_pedido",
+    indices = [Index("clienteId")]
+)
 data class ItemPedido(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val clienteId: Long,
@@ -36,7 +42,10 @@ data class ItemPedido(
  * Inventario extra de una semana: pan para venta en frío/espontánea.
  * No pertenece a ningún cliente; se suma a la orden de producción.
  */
-@Entity(tableName = "items_extra")
+@Entity(
+    tableName = "items_extra",
+    indices = [Index("semanaId")]
+)
 data class ItemExtra(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val semanaId: Long,

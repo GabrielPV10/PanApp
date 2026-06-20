@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [Semana::class, Cliente::class, ItemPedido::class, Producto::class, ItemExtra::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class PanDatabase : RoomDatabase() {
@@ -73,6 +73,25 @@ abstract class PanDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migración 5 → 6: índices en las claves foráneas más consultadas para
+         * acelerar los filtros por semana y por cliente. Los nombres siguen la
+         * convención de Room (index_<tabla>_<columna>) para pasar la validación.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_clientes_semanaId` ON `clientes` (`semanaId`)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_items_pedido_clienteId` ON `items_pedido` (`clienteId`)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_items_extra_semanaId` ON `items_extra` (`semanaId`)"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PanDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -80,7 +99,9 @@ abstract class PanDatabase : RoomDatabase() {
                     PanDatabase::class.java,
                     "pan_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6
+                    )
                     .build()
                     .also { db ->
                         INSTANCE = db
